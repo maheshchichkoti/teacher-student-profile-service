@@ -1,0 +1,131 @@
+import { Router } from 'express';
+import { config } from '../config.js';
+import { query } from '../db/mysql.js';
+import { ensureSnapshotRow, getSnapshot, parseSnapshotRow } from '../snapshotRepo.js';
+import { refreshStudentProfile } from '../worker.js';
+
+export const profileRouter = Router();
+
+function requireAuth(req, res, next) {
+  if (!config.internalApiSecret) return next();
+  const h = req.headers.authorization || '';
+  if (h !== `Bearer ${config.internalApiSecret}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  return next();
+}
+
+async function verifyTeacherOwnsStudent(req, res, next) {
+  const tid = req.headers['x-teacher-id'];
+  if (!tid) return next();
+  const studentId = Number(req.params.studentId);
+  const teacherId = Number(tid);
+  if (!Number.isFinite(studentId) || !Number.isFinite(teacherId)) {
+    return res.status(400).json({ error: 'Invalid ids' });
+  }
+  const rows = await query(
+    `SELECT 1 AS ok
+     FROM classes
+     WHERE student_id = :sid AND teacher_id = :tid
+     LIMIT 1`,
+    { sid: studentId, tid: teacherId },
+  );
+  if (!rows?.length) {
+    return res.status(403).json({ error: 'Teacher has no classes with this student' });
+  }
+  return next();
+}
+
+function mapRowToApi(row) {
+  const r = parseSnapshotRow(row);
+  if (!r) {
+    return {
+      studentId: null,
+      status: 'pending',
+      englishLevel: null,
+      totalWordsLearned: 0,
+      weakWords: [],
+      grammarTopics: [],
+      totalClasses: 0,
+      learningGoal: null,
+      aiSummary: null,
+      metricsUpdatedAt: null,
+      summaryUpdatedAt: null,
+    };
+  }
+  return {
+    studentId: r.studentId,
+    status: r.status,
+    englishLevel: r.englishLevel,
+    totalWordsLearned: Number(r.totalWordsLearned || 0),
+    weakWords: r.weakWords,
+    grammarTopics: r.grammarTopics,
+    totalClasses: Number(r.totalClasses || 0),
+    learningGoal: r.learningGoal,
+    aiSummary: r.aiSummary,
+    metricsUpdatedAt: r.metricsUpdatedAt
+      ? new Date(r.metricsUpdatedAt).toISOString()
+      : null,
+    summaryUpdatedAt: r.summaryUpdatedAt
+      ? new Date(r.summaryUpdatedAt).toISOString()
+      : null,
+  };
+}
+
+profileRouter.get(
+  '/v1/teachers/students/:studentId/profile',
+  requireAuth,
+  verifyTeacherOwnsStudent,
+  async (req, res) => {
+    const studentId = Number(req.params.studentId);
+    if (!Number.isFinite(studentId) || studentId <= 0) {
+      return res.status(400).json({ error: 'Invalid studentId' });
+    }
+
+    await ensureSnapshotRow(studentId);
+    let row = await getSnapshot(studentId);
+    const staleMs = config.metricsStaleAfterSec * 1000;
+    const mtime = row?.metricsUpdatedAt
+      ? new Date(row.metricsUpdatedAt).getTime()
+      : 0;
+    const genStuck =
+      row?.status === 'generating' &&
+      row?.updatedAt &&
+      Date.now() - new Date(row.updatedAt).getTime() > 180_000;
+    const needsRefresh =
+      ['pending', 'failed'].includes(row?.status) ||
+      genStuck ||
+      (row?.status !== 'generating' &&
+        (!Number.isFinite(mtime) || Date.now() - mtime > staleMs));
+
+    if (needsRefresh) {
+      setImmediate(() => {
+        refreshStudentProfile(studentId).catch(() => {});
+      });
+    }
+
+    row = await getSnapshot(studentId);
+    return res.json(mapRowToApi(row));
+  },
+);
+
+profileRouter.post(
+  '/v1/teachers/students/:studentId/profile/refresh',
+  requireAuth,
+  verifyTeacherOwnsStudent,
+  async (req, res) => {
+    const studentId = Number(req.params.studentId);
+    if (!Number.isFinite(studentId) || studentId <= 0) {
+      return res.status(400).json({ error: 'Invalid studentId' });
+    }
+    const skipLlm = req.query.skipLlm === '1' || req.query.skipLlm === 'true';
+    try {
+      const result = await refreshStudentProfile(studentId, { skipLlm });
+      return res.json(mapRowToApi(result));
+    } catch (e) {
+      return res.status(500).json({
+        error: e.message || 'Refresh failed',
+      });
+    }
+  },
+);

@@ -1,0 +1,22 @@
+{
+  "name": "teacher-student-profile-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Task 1: Student profile snapshot for teacher app — cached metrics + AI summary",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "worker:once": "node src/cli-worker-once.js",
+    "test": "node --test tests/**/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mysql2": "^3.12.0",
+    "openai": "^4.77.3"
+  }
+}

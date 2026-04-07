@@ -12,6 +12,8 @@ import {
 } from './snapshotRepo.js';
 import { shouldRegenerateSummary } from './summaryPolicy.js';
 
+const inFlightRefreshes = new Map();
+
 /**
  * Full refresh: metrics + optional LLM summary.
  * @param {number} studentId
@@ -19,68 +21,84 @@ import { shouldRegenerateSummary } from './summaryPolicy.js';
  */
 export async function refreshStudentProfile(studentId, opts = {}) {
   const sid = Number(studentId);
-  await ensureSnapshotRow(sid);
-  const existing = parseSnapshotRow(await getSnapshot(sid));
-
-  await markSnapshotGenerating(sid);
-
-  let metrics;
-  try {
-    metrics = await aggregateStudentMetrics(sid);
-  } catch (e) {
-    await markSnapshotFailed(sid);
-    throw e;
+  const existingInFlight = inFlightRefreshes.get(sid);
+  if (existingInFlight) {
+    console.log('[worker] refresh joined existing run', { studentId: sid });
+    return existingInFlight;
   }
 
-  const inputHash = computeInputHash(metrics);
-  await updateSnapshotMetrics(sid, metrics, inputHash);
+  const run = (async () => {
+    await ensureSnapshotRow(sid);
+    const existing = parseSnapshotRow(await getSnapshot(sid));
 
-  const reloaded = parseSnapshotRow(await getSnapshot(sid));
-  if (!reloaded) {
-    await markSnapshotFailed(sid);
-    throw new Error('Snapshot missing after metrics write');
-  }
+    await markSnapshotGenerating(sid);
 
-  if (opts.skipLlm) {
-    return reloaded;
-  }
+    let metrics;
+    try {
+      metrics = await aggregateStudentMetrics(sid);
+    } catch (e) {
+      await markSnapshotFailed(sid);
+      throw e;
+    }
 
-  const needLlm =
-    !reloaded.aiSummary ||
-    shouldRegenerateSummary({
-      newHash: inputHash,
-      prevHash: existing?.inputHash || null,
-      summaryUpdatedAt: reloaded.summaryUpdatedAt,
-      lastAnalysisAt: reloaded.lastAnalysisAt,
-    });
+    const inputHash = computeInputHash(metrics);
+    await updateSnapshotMetrics(sid, metrics, inputHash);
 
-  if (!needLlm) {
-    console.log('[worker] summary skipped (fresh)', {
-      studentId: sid,
-      hasSummary: Boolean(reloaded.aiSummary),
-    });
-    return reloaded;
-  }
+    const reloaded = parseSnapshotRow(await getSnapshot(sid));
+    if (!reloaded) {
+      await markSnapshotFailed(sid);
+      throw new Error('Snapshot missing after metrics write');
+    }
 
-  let summaryText;
-  try {
-    console.log('[worker] summary generation started', { studentId: sid });
-    summaryText = await generateTeacherSummary(metrics);
-  } catch (err) {
-    console.error('[worker] summary generation failed', {
-      studentId: sid,
-      message: err?.message,
-      stack: err?.stack,
-    });
-    if (reloaded.aiSummary) {
+    if (opts.skipLlm) {
       return reloaded;
     }
-    // Metrics are already persisted as `ready`; do not flip snapshot to `failed`
-    // so the screen stays usable (Task 1: never block profile on summary).
-    return reloaded;
-  }
 
-  await updateSnapshotSummary(sid, summaryText);
-  console.log('[worker] summary generation completed', { studentId: sid });
-  return parseSnapshotRow(await getSnapshot(sid));
+    const needLlm =
+      !reloaded.aiSummary ||
+      shouldRegenerateSummary({
+        newHash: inputHash,
+        prevHash: existing?.inputHash || null,
+        summaryUpdatedAt: reloaded.summaryUpdatedAt,
+        lastAnalysisAt: reloaded.lastAnalysisAt,
+      });
+
+    if (!needLlm) {
+      console.log('[worker] summary skipped (fresh)', {
+        studentId: sid,
+        hasSummary: Boolean(reloaded.aiSummary),
+      });
+      return reloaded;
+    }
+
+    let summaryText;
+    try {
+      console.log('[worker] summary generation started', { studentId: sid });
+      summaryText = await generateTeacherSummary(metrics);
+    } catch (err) {
+      console.error('[worker] summary generation failed', {
+        studentId: sid,
+        message: err?.message,
+        stack: err?.stack,
+      });
+      if (reloaded.aiSummary) {
+        return reloaded;
+      }
+      // Metrics are already persisted as `ready`; do not flip snapshot to `failed`
+      // so the screen stays usable (Task 1: never block profile on summary).
+      return reloaded;
+    }
+
+    await updateSnapshotSummary(sid, summaryText);
+    console.log('[worker] summary generation completed', { studentId: sid });
+    return parseSnapshotRow(await getSnapshot(sid));
+  })();
+
+  inFlightRefreshes.set(sid, run);
+
+  try {
+    return await run;
+  } finally {
+    inFlightRefreshes.delete(sid);
+  }
 }

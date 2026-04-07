@@ -62,6 +62,8 @@ export async function aggregateStudentMetrics(studentId) {
     throw new Error('Invalid studentId');
   }
 
+  console.log('[aggregate] start', { studentId: sid });
+
   const [classRow] = await query(
     `SELECT COUNT(*) AS total_classes
      FROM classes c
@@ -106,14 +108,15 @@ export async function aggregateStudentMetrics(studentId) {
     .slice(0, 19)
     .replace('T', ' ');
   const timeline = await query(
-    `SELECT zoom_meeting_id AS zoomMeetingId,
+    `SELECT id AS classId,
+            zoom_meeting_id AS zoomMeetingId,
             admin_url AS adminUrl,
             join_url AS joinUrl,
             meeting_start AS meetingStart,
             meeting_end AS meetingEnd
      FROM classes
      WHERE student_id = :sid
-       AND status IN ('ended', 'completed')
+       AND status = 'ended'
        AND is_present = 1
        AND meeting_start >= :cutoffTs
      ORDER BY meeting_start DESC
@@ -125,8 +128,17 @@ export async function aggregateStudentMetrics(studentId) {
   const vocabAll = new Set();
   const pronunciationFlagRows = [];
   let lastAnalysisMs = null;
+  const enrichmentDebugSamples = [];
+
+  let timelineRowsCount = 0;
+  let skippedMissingMeetingId = 0;
+  let enrichmentMatched = 0;
+  let enrichmentMissed = 0;
+  let parsedResponseMissing = 0;
+  let parsedResponseOk = 0;
 
   const pgConfigured = Boolean(getPgPool());
+  timelineRowsCount = timeline.length;
 
   for (const row of timeline) {
     const meetingId = normalizeZoomMeetingId(
@@ -134,20 +146,75 @@ export async function aggregateStudentMetrics(studentId) {
       row.adminUrl,
       row.joinUrl,
     );
-    if (!meetingId || !row.meetingStart) continue;
+    if (!meetingId || !row.meetingStart) {
+      skippedMissingMeetingId += 1;
+      if (enrichmentDebugSamples.length < 5) {
+        enrichmentDebugSamples.push({
+          kind: 'missing_meeting_id',
+          rawZoomMeetingId: row.zoomMeetingId || null,
+          meetingStart: row.meetingStart || null,
+          meetingEnd: row.meetingEnd || null,
+        });
+      }
+      continue;
+    }
 
     if (!pgConfigured) continue;
 
     let enrichment;
     try {
-      enrichment = await fetchSessionEnrichment(meetingId, row.meetingStart, row.meetingEnd);
-    } catch {
+      enrichment = await fetchSessionEnrichment(
+        row.classId,
+        meetingId,
+        row.meetingStart,
+        row.meetingEnd,
+      );
+    } catch (err) {
+      enrichmentMissed += 1;
+      if (enrichmentDebugSamples.length < 5) {
+        enrichmentDebugSamples.push({
+          kind: 'pg_lookup_error',
+          classId: row.classId || null,
+          meetingId,
+          meetingStart: row.meetingStart || null,
+          meetingEnd: row.meetingEnd || null,
+          message: err?.message || 'Unknown Postgres lookup error',
+        });
+      }
       continue;
     }
-    if (!enrichment) continue;
+    if (!enrichment) {
+      enrichmentMissed += 1;
+      if (enrichmentDebugSamples.length < 5) {
+        enrichmentDebugSamples.push({
+          kind: 'no_enrichment_match',
+          classId: row.classId || null,
+          meetingId,
+          meetingStart: row.meetingStart || null,
+          meetingEnd: row.meetingEnd || null,
+        });
+      }
+      continue;
+    }
+
+    enrichmentMatched += 1;
 
     const pr = parseJsonValue(enrichment.parsed_response);
-    if (!pr) continue;
+    if (!pr) {
+      parsedResponseMissing += 1;
+      if (enrichmentDebugSamples.length < 5) {
+        enrichmentDebugSamples.push({
+          kind: 'parsed_response_missing',
+          classId: row.classId || null,
+          meetingId,
+          meetingStart: row.meetingStart || null,
+          recordingStart: enrichment.recording_start || null,
+        });
+      }
+      continue;
+    }
+
+    parsedResponseOk += 1;
 
     if (!learningGoal) {
       const goalFromParsed = learningGoalFromParsed(pr);
@@ -182,6 +249,30 @@ export async function aggregateStudentMetrics(studentId) {
   const grammarTopics = [...grammarSet.values()].sort((a, b) => a.localeCompare(b));
   const totalWordsLearned = vocabAll.size;
   const weakWords = mergeWeakFromPronunciationFlags(pronunciationFlagRows);
+
+  const englishLevelSource = englishLevel
+    ? (parsedResponseOk > 0 ? 'postgres_parsed_response_or_mysql_fallback' : 'mysql_user_fallback')
+    : 'none';
+
+  console.log('[aggregate] result', {
+    studentId: sid,
+    totalClasses,
+    learningGoal,
+    englishLevel,
+    englishLevelSource,
+    totalWordsLearned,
+    grammarTopicsCount: grammarTopics.length,
+    weakWordsCount: weakWords.length,
+    lastAnalysisAt: lastAnalysisMs ? new Date(lastAnalysisMs).toISOString() : null,
+    pgConfigured,
+    timelineRowsCount,
+    skippedMissingMeetingId,
+    enrichmentMatched,
+    enrichmentMissed,
+    parsedResponseMissing,
+    parsedResponseOk,
+    enrichmentDebugSamples,
+  });
 
   return {
     studentId: sid,

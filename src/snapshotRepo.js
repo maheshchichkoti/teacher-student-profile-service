@@ -55,7 +55,8 @@ export async function updateSnapshotMetrics(studentId, metrics, inputHash) {
          grammar_topics = $7::jsonb,
          input_hash = $8,
          last_analysis_at = $9::timestamptz,
-         metrics_updated_at = now()
+         metrics_updated_at = now(),
+         updated_at = now()
      WHERE student_id = $1`,
     [
       sid,
@@ -77,7 +78,8 @@ export async function updateSnapshotSummary(studentId, text) {
     `UPDATE serve.student_profile_snapshots
      SET ai_summary = $2,
          summary_updated_at = now(),
-         status = 'ready'
+         status = 'ready',
+         updated_at = now()
      WHERE student_id = $1`,
     [sid, text],
   );
@@ -87,7 +89,8 @@ export async function markSnapshotFailed(studentId) {
   const sid = Number(studentId);
   await queryPg(
     `UPDATE serve.student_profile_snapshots
-     SET status = 'failed'
+     SET status = 'failed',
+         updated_at = now()
      WHERE student_id = $1`,
     [sid],
   );
@@ -97,7 +100,8 @@ export async function markSnapshotGenerating(studentId) {
   const sid = Number(studentId);
   await queryPg(
     `UPDATE serve.student_profile_snapshots
-     SET status = 'generating'
+     SET status = 'generating',
+         updated_at = now()
      WHERE student_id = $1`,
     [sid],
   );

@@ -7,6 +7,7 @@ export function summaryDisplayFromRow(r) {
   const text = r.aiSummary != null && String(r.aiSummary).trim();
   if (text) return String(r.aiSummary).trim();
   if (r.status === 'failed') return 'Summary temporarily unavailable';
+  if (r.status === 'ready') return 'Summary not available yet';
   return 'Generating summary...';
 }
 

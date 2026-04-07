@@ -34,7 +34,10 @@ Rules:
 
   const user = `Use only this JSON data:\n${JSON.stringify(block, null, 2)}`;
 
-  const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+  const configuredModel = (process.env.GEMINI_MODEL || '').trim();
+  const model = !configuredModel || configuredModel === 'gemini-2.0-flash'
+    ? 'gemini-2.5-flash'
+    : configuredModel;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(geminiKey)}`;
   const res = await fetch(url, {
     method: 'POST',

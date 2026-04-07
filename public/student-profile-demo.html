@@ -68,6 +68,15 @@
     .metric k { display: block; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
     .metric v { font-size: 1rem; margin-top: 0.25rem; word-break: break-word; }
     .summary { font-size: 1rem; line-height: 1.6; }
+    .note {
+      margin-top: 0.75rem;
+      padding: 0.75rem 0.9rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(59, 130, 246, 0.08);
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     th, td { text-align: left; padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--border); }
     th { color: var(--muted); font-weight: 500; }
@@ -108,6 +117,7 @@
       <div class="card">
         <h2 style="font-size:1rem; margin:0 0 0.75rem;">Summary for UI (`summaryDisplay`)</h2>
         <p id="summaryDisplay" class="summary"></p>
+        <div id="analysisNote" class="note" style="display:none;"></div>
       </div>
       <div class="card">
         <h2 style="font-size:1rem; margin:0 0 0.75rem;">Key metrics</h2>
@@ -145,6 +155,16 @@
       $('result').style.display = 'block';
       $('summaryDisplay').textContent = data.summaryDisplay || data.aiSummary || '—';
 
+      const showAnalysisNote =
+        Number(data.totalClasses || 0) > 0 &&
+        !data.lastAnalysisAt &&
+        (!Array.isArray(data.grammarTopics) || data.grammarTopics.length === 0) &&
+        !data.englishLevel;
+      $('analysisNote').style.display = showAnalysisNote ? 'block' : 'none';
+      $('analysisNote').textContent = showAnalysisNote
+        ? 'Ended classes were found, but no LLM analysis has been safely matched to those sessions yet. This usually means the recording bridge is still unmatched or the meeting ID was reused across multiple PMR sessions.'
+        : '';
+
       const metrics = [
         ['englishLevel', data.englishLevel],
         ['totalWordsLearned', data.totalWordsLearned],
@@ -174,6 +194,28 @@
       $('rawJson').textContent = JSON.stringify(data, null, 2);
     }
 
+    async function pollForFreshSnapshot(studentId) {
+      for (let i = 0; i < 20; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        try {
+          const res = await fetch('/v1/teachers/students/' + encodeURIComponent(studentId) + '/profile', {
+            method: 'GET',
+            headers: headers(),
+            cache: 'no-store',
+          });
+          if (!res.ok) return;
+          const data = await res.json();
+          render(data);
+          $('statusText').textContent = 'OK · GET';
+          if (data.status !== 'pending' && data.status !== 'generating') {
+            return;
+          }
+        } catch (_) {
+          return;
+        }
+      }
+    }
+
     async function loadProfile(refresh) {
       const sid = $('studentId').value.trim();
       if (!sid) { showErr('Enter a student ID.'); return; }
@@ -186,6 +228,7 @@
           : '/v1/teachers/students/' + encodeURIComponent(sid) + '/profile';
         const res = await fetch(url, {
           method: refresh ? 'POST' : 'GET',
+          cache: 'no-store',
           headers: { ...headers(), ...(refresh ? { 'Content-Type': 'application/json' } : {}) },
           body: refresh ? '{}' : undefined,
         });
@@ -199,6 +242,9 @@
         }
         render(data);
         $('statusText').textContent = 'OK · ' + (refresh ? 'refresh' : 'GET');
+        if (!refresh && (data.status === 'pending' || data.status === 'generating')) {
+          pollForFreshSnapshot(sid);
+        }
       } catch (e) {
         showErr(String(e.message || e));
         $('result').style.display = 'none';

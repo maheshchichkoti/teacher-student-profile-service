@@ -43,6 +43,6 @@ test('summaryDisplayFromRow failed without summary', () => {
 test('summaryDisplayFromRow generating placeholder', () => {
   assert.equal(
     summaryDisplayFromRow({ status: 'ready', aiSummary: null }),
-    'Generating summary...',
+    'Summary not available yet',
   );
 });

@@ -254,7 +254,12 @@
       if (init.search) $('search').value = init.search;
       if (init.sortBy) $('sortBy').value = init.sortBy;
       if (init.page) page = init.page;
-        load();
+      if (window.location.protocol === 'file:') {
+        showErr('Open this page via the running server, not as a local file.\\nUse: http://localhost:3840/');
+        $('statusText').textContent = '';
+        return;
+      }
+      load();
     })();
   </script>
 </body>

@@ -208,6 +208,11 @@
     }
 
     function initFromQuery() {
+      if (window.location.protocol === 'file:') {
+        showErr('Open this page via the running server, not as a local file.\\nUse: http://localhost:3840/');
+        $('statusText').textContent = '';
+        return;
+      }
       const p = new URLSearchParams(window.location.search);
       const sid = p.get('studentId');
       if (sid) $('studentId').value = sid;

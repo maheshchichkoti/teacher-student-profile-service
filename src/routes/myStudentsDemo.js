@@ -40,90 +40,92 @@ function safeOrder(sortOrder) {
  * `classes` + `users` using tolerant column selection.
  */
 myStudentsDemoRouter.get('/demo/my-students', async (req, res) => {
-  // Demo mode: no auth, no teacher selection required.
-  // If a teacherId is provided, we can scope to that teacher; otherwise list all active students.
-  const teacherId = req.query.teacherId != null ? coercePositiveInt(req.query.teacherId, null) : null;
+  try {
+    // Demo mode: no auth, no teacher selection required.
+    // If a teacherId is provided, we can scope to that teacher; otherwise list all active students.
+    const teacherId =
+      req.query.teacherId != null ? coercePositiveInt(req.query.teacherId, null) : null;
 
-  const page = coercePositiveInt(req.query.page, 1);
-  const limit = Math.min(coercePositiveInt(req.query.limit, 10), 50);
-  const offset = (page - 1) * limit;
-  const search = String(req.query.search || '').trim();
+    const page = coercePositiveInt(req.query.page, 1);
+    const limit = Math.min(coercePositiveInt(req.query.limit, 10), 50);
+    const offset = (page - 1) * limit;
+    const search = String(req.query.search || '').trim();
 
-  const sortBy = safeSort(String(req.query.sortBy || 'name'));
-  const sortOrder = safeOrder(String(req.query.sortOrder || 'desc'));
+    const sortBy = safeSort(String(req.query.sortBy || 'name'));
+    const sortOrder = safeOrder(String(req.query.sortOrder || 'desc'));
 
-  // Filters from main app exist, but this demo implements only status/search.
-  const status = String(req.query.status || '').trim();
+    // Filters from main app exist, but this demo implements only status/search.
+    const status = String(req.query.status || '').trim();
 
-  const where = [];
-  const params = { limit, offset };
+    const where = [];
+    const params = { limit, offset };
 
-  // Active students heuristic (same idea as snapshot totalClasses): ended + present.
-  where.push(`c.status = 'ended' AND c.is_present = 1`);
+    // Active students heuristic (same idea as snapshot totalClasses): ended + present.
+    where.push(`c.status = 'ended' AND c.is_present = 1`);
 
-  if (teacherId) {
-    params.tid = teacherId;
-    where.push('c.teacher_id = :tid');
-  }
+    if (teacherId) {
+      params.tid = teacherId;
+      where.push('c.teacher_id = :tid');
+    }
 
-  // If status is requested, we can only approximate. Keep "active" as default (no-op).
-  if (status && status !== 'active') {
-    // Demo: no data source for transferred/canceled; return empty for non-active filters.
-    return res.json({
-      pagination: {
-        currentPage: page,
-        totalPages: 1,
-        totalStudents: 0,
-        itemsPerPage: limit,
-        hasNextPage: false,
-        hasPreviousPage: page > 1,
-      },
-      students: [],
-      metrics: {
-        totalStudents: 0,
-        activeStudents: 0,
-        atRiskStudents: 0,
-        newStudentsThisMonth: 0,
-        uniqueStudentsPerDay: 0,
-        uniqueStudentsPerDayChange: 0,
-        averageClassesPerDay: 0,
-        averageClassesPerDayChange: 0,
-        averageClassesLast7Days: 0,
-        averageUniqueStudentsLast7Days: 0,
-      },
-    });
-  }
+    // If status is requested, we can only approximate. Keep "active" as default (no-op).
+    if (status && status !== 'active') {
+      // Demo: no data source for transferred/canceled; return empty for non-active filters.
+      return res.json({
+        pagination: {
+          currentPage: page,
+          totalPages: 1,
+          totalStudents: 0,
+          itemsPerPage: limit,
+          hasNextPage: false,
+          hasPreviousPage: page > 1,
+        },
+        students: [],
+        metrics: {
+          totalStudents: 0,
+          activeStudents: 0,
+          atRiskStudents: 0,
+          newStudentsThisMonth: 0,
+          uniqueStudentsPerDay: 0,
+          uniqueStudentsPerDayChange: 0,
+          averageClassesPerDay: 0,
+          averageClassesPerDayChange: 0,
+          averageClassesLast7Days: 0,
+          averageUniqueStudentsLast7Days: 0,
+        },
+      });
+    }
 
-  if (search) {
-    params.q = `%${search}%`;
-    where.push(`(
-      COALESCE(NULLIF(TRIM(u.name), ''), '') LIKE :q
-      OR COALESCE(NULLIF(TRIM(u.full_name), ''), '') LIKE :q
-      OR COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), '') LIKE :q
-      OR COALESCE(NULLIF(TRIM(u.email), ''), '') LIKE :q
-    )`);
-  }
+    if (search) {
+      params.q = `%${search}%`;
+      where.push(`(
+        COALESCE(NULLIF(TRIM(u.name), ''), '') LIKE :q
+        OR COALESCE(NULLIF(TRIM(u.full_name), ''), '') LIKE :q
+        OR COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), '') LIKE :q
+        OR COALESCE(NULLIF(TRIM(u.email), ''), '') LIKE :q
+      )`);
+    }
 
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
   // Total distinct students for pagination.
-  const [countRow] = await query(
-    `SELECT COUNT(DISTINCT c.student_id) AS total
-     FROM classes c
-     LEFT JOIN users u ON u.id = c.student_id
-     ${whereSql}`,
-    params,
-  );
-  const totalStudents = Number(countRow?.total || 0);
-  const totalPages = Math.max(1, Math.ceil(totalStudents / limit));
+    const [countRow] = await query(
+      `SELECT COUNT(DISTINCT c.student_id) AS total
+       FROM classes c
+       LEFT JOIN users u ON u.id = c.student_id
+       ${whereSql}`,
+      params,
+    );
+    const totalStudents = Number(countRow?.total || 0);
+    const totalPages = Math.max(1, Math.ceil(totalStudents / limit));
 
   // Aggregate per student.
   // Notes:
   // - totalClasses uses ended + present heuristic (same as snapshot metrics).
   // - learningMinutes uses meeting_start/end when present; otherwise 0.
   // - lastClassDate uses last ended+present class; nextClassDate uses future meeting_start when available.
-  const rows = await query(
-    `SELECT
+    const rows = await query(
+      `SELECT
         c.student_id AS studentId,
         COALESCE(
           NULLIF(TRIM(u.name), ''),
@@ -149,12 +151,12 @@ myStudentsDemoRouter.get('/demo/my-students', async (req, res) => {
      ${whereSql}
      GROUP BY c.student_id
      ORDER BY ${sortBy} ${sortOrder}
-     LIMIT :limit OFFSET :offset`,
-    params,
-  );
+       LIMIT :limit OFFSET :offset`,
+      params,
+    );
 
-  const nowMs = Date.now();
-  const students = rows.map((r) => {
+    const nowMs = Date.now();
+    const students = rows.map((r) => {
     const last = r.lastClassDate ? new Date(r.lastClassDate) : null;
     const next = r.nextClassDate ? new Date(r.nextClassDate) : null;
     const lastDays =
@@ -191,30 +193,35 @@ myStudentsDemoRouter.get('/demo/my-students', async (req, res) => {
       daysUntilRenewal: null,
       regularClasses: null,
     };
-  });
+    });
 
-  return res.json({
-    pagination: {
-      currentPage: page,
-      totalPages,
-      totalStudents,
-      itemsPerPage: limit,
-      hasNextPage: page < totalPages,
-      hasPreviousPage: page > 1,
-    },
-    students,
-    metrics: {
-      totalStudents,
-      activeStudents: totalStudents,
-      atRiskStudents: 0,
-      newStudentsThisMonth: 0,
-      uniqueStudentsPerDay: 0,
-      uniqueStudentsPerDayChange: 0,
-      averageClassesPerDay: 0,
-      averageClassesPerDayChange: 0,
-      averageClassesLast7Days: 0,
-      averageUniqueStudentsLast7Days: 0,
-    },
-  });
+    return res.json({
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalStudents,
+        itemsPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+      students,
+      metrics: {
+        totalStudents,
+        activeStudents: totalStudents,
+        atRiskStudents: 0,
+        newStudentsThisMonth: 0,
+        uniqueStudentsPerDay: 0,
+        uniqueStudentsPerDayChange: 0,
+        averageClassesPerDay: 0,
+        averageClassesPerDayChange: 0,
+        averageClassesLast7Days: 0,
+        averageUniqueStudentsLast7Days: 0,
+      },
+    });
+  } catch (e) {
+    return res.status(500).json({
+      error: e?.message || 'Failed to load students',
+    });
+  }
 });
 

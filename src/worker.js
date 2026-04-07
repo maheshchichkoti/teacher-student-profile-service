@@ -55,13 +55,23 @@ export async function refreshStudentProfile(studentId, opts = {}) {
     });
 
   if (!needLlm) {
+    console.log('[worker] summary skipped (fresh)', {
+      studentId: sid,
+      hasSummary: Boolean(reloaded.aiSummary),
+    });
     return reloaded;
   }
 
   let summaryText;
   try {
+    console.log('[worker] summary generation started', { studentId: sid });
     summaryText = await generateTeacherSummary(metrics);
   } catch (err) {
+    console.error('[worker] summary generation failed', {
+      studentId: sid,
+      message: err?.message,
+      stack: err?.stack,
+    });
     if (reloaded.aiSummary) {
       return reloaded;
     }
@@ -71,5 +81,6 @@ export async function refreshStudentProfile(studentId, opts = {}) {
   }
 
   await updateSnapshotSummary(sid, summaryText);
+  console.log('[worker] summary generation completed', { studentId: sid });
   return parseSnapshotRow(await getSnapshot(sid));
 }

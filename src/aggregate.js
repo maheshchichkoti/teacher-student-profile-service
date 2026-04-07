@@ -117,8 +117,8 @@ export async function aggregateStudentMetrics(studentId) {
        AND is_present = 1
        AND meeting_start >= :cutoffTs
      ORDER BY meeting_start DESC
-     LIMIT :maxClasses`,
-    { sid, cutoffTs, maxClasses },
+     LIMIT ${maxClasses}`,
+    { sid, cutoffTs },
   );
 
   const grammarSet = new Map();

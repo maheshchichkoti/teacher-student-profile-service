@@ -15,7 +15,8 @@ LEFT JOIN raw.llm_responses r
 WHERE z.meeting_id = $1
   AND z.recording_start BETWEEN $2::timestamptz - INTERVAL '30 minutes'
                             AND $3::timestamptz + INTERVAL '30 minutes'
-ORDER BY z.recording_start DESC
+-- Meeting links/IDs can be reused; prefer the closest recording_start to class start.
+ORDER BY ABS(EXTRACT(EPOCH FROM (z.recording_start - $2::timestamptz))) ASC
 LIMIT 1
 `;
 

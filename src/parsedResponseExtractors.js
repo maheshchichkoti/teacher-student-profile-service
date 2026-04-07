@@ -165,3 +165,32 @@ export function levelFromParsed(pr) {
   }
   return null;
 }
+
+/** @param {Record<string, unknown>|null} pr */
+export function learningGoalFromParsed(pr) {
+  if (!pr || typeof pr !== 'object') return null;
+  const md = metadataFromParsed(pr);
+  const la = lessonAnalysisFromParsed(pr);
+  const candidates = [
+    md?.goal,
+    md?.learning_goal,
+    la?.goal,
+    la?.lesson_goal,
+    la?.lesson_goals,
+    pr.goal,
+    pr.learning_goal,
+    pr.topic,
+  ];
+  for (const c of candidates) {
+    if (Array.isArray(c)) {
+      const joined = c
+        .map((x) => (x == null ? '' : String(x).trim()))
+        .filter(Boolean)
+        .join(', ');
+      if (joined) return joined.slice(0, 500);
+      continue;
+    }
+    if (c != null && String(c).trim()) return String(c).trim().slice(0, 500);
+  }
+  return null;
+}

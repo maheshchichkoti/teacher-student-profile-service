@@ -1,9 +1,11 @@
 import { query } from './db/mysql.js';
 import { getPgPool } from './db/postgres.js';
+import { config } from './config.js';
 import { normalizeZoomMeetingId } from './meetingId.js';
 import { fetchSessionEnrichment } from './enrichmentPg.js';
 import {
   grammarPointsFromParsed,
+  learningGoalFromParsed,
   levelFromParsed,
   parseJsonValue,
   pronunciationFlagsFromParsed,
@@ -92,24 +94,17 @@ export async function aggregateStudentMetrics(studentId) {
     { sid },
   );
 
-  const [goalUserGoal] = await query(
-    `SELECT goal_name
-     FROM user_goals
-     WHERE user_id = :sid
-       AND goal_name IS NOT NULL
-       AND TRIM(goal_name) != ''
-     ORDER BY id DESC
-     LIMIT 1`,
-    { sid },
-  );
-
   const classGoal = goalClass?.student_goal?.trim() || '';
   const whatLearn = userRow?.what_learn?.trim() || '';
-  const ug = goalUserGoal?.goal_name?.trim() || '';
-  const learningGoal = classGoal || whatLearn || ug || null;
+  let learningGoal = classGoal || whatLearn || null;
+  let englishLevel = null;
 
-  let englishLevel = userRow?.student_level ? String(userRow.student_level).trim().slice(0, 50) : null;
-
+  const windowDays = Math.max(1, Number(config.profileAnalysisWindowDays || 90));
+  const maxClasses = Math.max(1, Math.min(200, Number(config.profileAnalysisMaxClasses || 20)));
+  const cutoffTs = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 19)
+    .replace('T', ' ');
   const timeline = await query(
     `SELECT zoom_meeting_id AS zoomMeetingId,
             admin_url AS adminUrl,
@@ -120,9 +115,10 @@ export async function aggregateStudentMetrics(studentId) {
      WHERE student_id = :sid
        AND status IN ('ended', 'completed')
        AND is_present = 1
+       AND meeting_start >= :cutoffTs
      ORDER BY meeting_start DESC
-     LIMIT 20`,
-    { sid },
+     LIMIT :maxClasses`,
+    { sid, cutoffTs, maxClasses },
   );
 
   const grammarSet = new Map();
@@ -153,6 +149,11 @@ export async function aggregateStudentMetrics(studentId) {
     const pr = parseJsonValue(enrichment.parsed_response);
     if (!pr) continue;
 
+    if (!learningGoal) {
+      const goalFromParsed = learningGoalFromParsed(pr);
+      if (goalFromParsed) learningGoal = goalFromParsed;
+    }
+
     for (const g of grammarPointsFromParsed(pr)) {
       if (!grammarSet.has(g.toLowerCase())) grammarSet.set(g.toLowerCase(), g);
     }
@@ -163,10 +164,8 @@ export async function aggregateStudentMetrics(studentId) {
       if (f && typeof f === 'object') pronunciationFlagRows.push(f);
     }
 
-    if (!englishLevel) {
-      const lvl = levelFromParsed(pr);
-      if (lvl) englishLevel = lvl;
-    }
+    const lvl = levelFromParsed(pr);
+    if (lvl && !englishLevel) englishLevel = lvl;
 
     if (enrichment.recording_start) {
       const t = new Date(enrichment.recording_start).getTime();
@@ -174,6 +173,10 @@ export async function aggregateStudentMetrics(studentId) {
         lastAnalysisMs = t;
       }
     }
+  }
+
+  if (!englishLevel && userRow?.student_level) {
+    englishLevel = String(userRow.student_level).trim().slice(0, 50) || null;
   }
 
   const grammarTopics = [...grammarSet.values()].sort((a, b) => a.localeCompare(b));

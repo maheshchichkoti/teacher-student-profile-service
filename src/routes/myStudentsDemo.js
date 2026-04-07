@@ -3,6 +3,33 @@ import { query } from '../db/mysql.js';
 
 export const myStudentsDemoRouter = Router();
 
+const studentLevels = {
+  1: 'Pre basic 1',
+  2: 'Basic user A1',
+  3: 'High basic user A1',
+  4: 'Low basic user A2',
+  5: 'Basic user A2',
+  6: 'High basic user A2',
+  7: 'Low independent user B1',
+  8: 'Independent user B1',
+  9: 'High independent user B1',
+  10: 'Low independent user B2',
+  11: 'Independent user B2',
+  12: 'High independent user B2',
+  13: 'Advanced C1',
+  14: 'Superior Advanced C1',
+  15: 'Highly Advanced C1',
+};
+
+function mapStudentLevel(rawLevel) {
+  if (rawLevel == null) return null;
+  const v = String(rawLevel).trim();
+  if (!v) return null;
+  const n = Number(v);
+  if (Number.isInteger(n) && studentLevels[n]) return studentLevels[n];
+  return v;
+}
+
 function coercePositiveInt(v, fallback) {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return fallback;
@@ -21,10 +48,6 @@ function safeSort(sortBy) {
       return 'learningMinutes';
     case 'lastClass':
       return 'lastClassDate';
-    case 'renewalDate':
-      return 'subscriptionRenewal';
-    case 'subscriptionUsage':
-      return 'subscriptionUsed';
     default:
       return 'studentName';
   }
@@ -41,11 +64,6 @@ function safeOrder(sortOrder) {
  */
 myStudentsDemoRouter.get('/demo/my-students', async (req, res) => {
   try {
-    // Demo mode: no auth, no teacher selection required.
-    // If a teacherId is provided, we can scope to that teacher; otherwise list all active students.
-    const teacherId =
-      req.query.teacherId != null ? coercePositiveInt(req.query.teacherId, null) : null;
-
     const page = coercePositiveInt(req.query.page, 1);
     const limit = Math.min(coercePositiveInt(req.query.limit, 10), 50);
     const offset = (page - 1) * limit;
@@ -53,20 +71,25 @@ myStudentsDemoRouter.get('/demo/my-students', async (req, res) => {
 
     const sortBy = safeSort(String(req.query.sortBy || 'name'));
     const sortOrder = safeOrder(String(req.query.sortOrder || 'desc'));
+    const startedAt = Date.now();
+
+    console.log('[demo/my-students] request', {
+      page,
+      limit,
+      search,
+      sortBy,
+      sortOrder,
+      status: String(req.query.status || '').trim(),
+    });
 
     // Filters from main app exist, but this demo implements only status/search.
     const status = String(req.query.status || '').trim();
 
     const where = [];
-    const params = { limit, offset };
+    const params = {};
 
     // Active students heuristic (same idea as snapshot totalClasses): ended + present.
     where.push(`c.status = 'ended' AND c.is_present = 1`);
-
-    if (teacherId) {
-      params.tid = teacherId;
-      where.push('c.teacher_id = :tid');
-    }
 
     // If status is requested, we can only approximate. Keep "active" as default (no-op).
     if (status && status !== 'active') {
@@ -99,16 +122,14 @@ myStudentsDemoRouter.get('/demo/my-students', async (req, res) => {
     if (search) {
       params.q = `%${search}%`;
       where.push(`(
-        COALESCE(NULLIF(TRIM(u.name), ''), '') LIKE :q
-        OR COALESCE(NULLIF(TRIM(u.full_name), ''), '') LIKE :q
-        OR COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), '') LIKE :q
+        COALESCE(NULLIF(TRIM(u.full_name), ''), '') LIKE :q
         OR COALESCE(NULLIF(TRIM(u.email), ''), '') LIKE :q
       )`);
     }
 
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-  // Total distinct students for pagination.
+    // Total distinct students for pagination.
     const [countRow] = await query(
       `SELECT COUNT(DISTINCT c.student_id) AS total
        FROM classes c
@@ -119,23 +140,21 @@ myStudentsDemoRouter.get('/demo/my-students', async (req, res) => {
     const totalStudents = Number(countRow?.total || 0);
     const totalPages = Math.max(1, Math.ceil(totalStudents / limit));
 
-  // Aggregate per student.
-  // Notes:
-  // - totalClasses uses ended + present heuristic (same as snapshot metrics).
-  // - learningMinutes uses meeting_start/end when present; otherwise 0.
-  // - lastClassDate uses last ended+present class; nextClassDate uses future meeting_start when available.
+    // Aggregate per student.
+    // Notes:
+    // - totalClasses uses ended + present heuristic (same as snapshot metrics).
+    // - learningMinutes uses meeting_start/end when present; otherwise 0.
+    // - lastClassDate uses last ended+present class; nextClassDate uses future meeting_start when available.
     const rows = await query(
       `SELECT
         c.student_id AS studentId,
         COALESCE(
-          NULLIF(TRIM(u.name), ''),
           NULLIF(TRIM(u.full_name), ''),
-          NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''),
           CONCAT('Student ', c.student_id)
         ) AS studentName,
-        COALESCE(NULLIF(TRIM(u.avatar), ''), NULLIF(TRIM(u.profile_pic), ''), NULLIF(TRIM(u.image), ''), '') AS avatar,
+        COALESCE(NULLIF(TRIM(u.avatar), ''), '') AS avatar,
         u.age AS age,
-        COALESCE(NULLIF(TRIM(u.student_level), ''), NULLIF(TRIM(u.level), ''), NULL) AS level,
+        NULLIF(TRIM(CAST(u.student_level AS CHAR)), '') AS level,
         SUM(CASE WHEN c.status = 'ended' AND c.is_present = 1 THEN 1 ELSE 0 END) AS totalClasses,
         SUM(
           CASE
@@ -151,48 +170,54 @@ myStudentsDemoRouter.get('/demo/my-students', async (req, res) => {
      ${whereSql}
      GROUP BY c.student_id
      ORDER BY ${sortBy} ${sortOrder}
-       LIMIT :limit OFFSET :offset`,
+     LIMIT ${limit} OFFSET ${offset}`,
       params,
     );
 
     const nowMs = Date.now();
     const students = rows.map((r) => {
-    const last = r.lastClassDate ? new Date(r.lastClassDate) : null;
-    const next = r.nextClassDate ? new Date(r.nextClassDate) : null;
-    const lastDays =
-      last && Number.isFinite(last.getTime())
-        ? Math.max(0, Math.floor((nowMs - last.getTime()) / 86400000))
-        : null;
+      const last = r.lastClassDate ? new Date(r.lastClassDate) : null;
+      const next = r.nextClassDate ? new Date(r.nextClassDate) : null;
+      const lastDays =
+        last && Number.isFinite(last.getTime())
+          ? Math.max(0, Math.floor((nowMs - last.getTime()) / 86400000))
+          : null;
 
-    const learningMinutes = Number(r.learningMinutes || 0);
-    const learningHours = Number.isFinite(learningMinutes)
-      ? Math.round((learningMinutes / 60) * 10) / 10
-      : 0;
+      const learningMinutes = Number(r.learningMinutes || 0);
+      const learningHours = Number.isFinite(learningMinutes)
+        ? Math.round((learningMinutes / 60) * 10) / 10
+        : 0;
 
-    return {
-      subscriptionDurationDays: null,
-      id: String(r.studentId),
-      name: String(r.studentName || `Student ${r.studentId}`),
-      avatar: String(r.avatar || ''),
-      age: r.age != null && Number.isFinite(Number(r.age)) ? Number(r.age) : null,
-      level: r.level != null && String(r.level).trim() ? String(r.level).trim() : null,
-      status: 'active',
-      totalClasses: Number(r.totalClasses || 0),
-      learningHours: {
-        withYou: learningHours,
-        withOthers: 0,
-        total: learningHours,
-      },
-      lastClassDays: lastDays,
-      lastClassDate: last ? last.toISOString() : null,
-      nextClassDate: next ? next.toISOString() : null,
-      subscriptionStatus: null,
-      subscriptionRenewal: null,
-      subscriptionProgress: null,
-      subscriptionDetails: null,
-      daysUntilRenewal: null,
-      regularClasses: null,
-    };
+      return {
+        subscriptionDurationDays: null,
+        id: String(r.studentId),
+        name: String(r.studentName || `Student ${r.studentId}`),
+        avatar: String(r.avatar || ''),
+        age: r.age != null && Number.isFinite(Number(r.age)) ? Number(r.age) : null,
+        level: mapStudentLevel(r.level),
+        status: 'active',
+        totalClasses: Number(r.totalClasses || 0),
+        learningHours: {
+          withYou: learningHours,
+          withOthers: 0,
+          total: learningHours,
+        },
+        lastClassDays: lastDays,
+        lastClassDate: last ? last.toISOString() : null,
+        nextClassDate: next ? next.toISOString() : null,
+        subscriptionStatus: null,
+        subscriptionRenewal: null,
+        subscriptionProgress: null,
+        subscriptionDetails: null,
+        daysUntilRenewal: null,
+        regularClasses: null,
+      };
+    });
+
+    console.log('[demo/my-students] success', {
+      totalStudents,
+      returnedStudents: students.length,
+      durationMs: Date.now() - startedAt,
     });
 
     return res.json({
@@ -219,9 +244,15 @@ myStudentsDemoRouter.get('/demo/my-students', async (req, res) => {
       },
     });
   } catch (e) {
+    console.error('[demo/my-students] failed', {
+      query: req.query,
+      message: e?.message,
+      code: e?.code,
+      sqlMessage: e?.sqlMessage,
+      stack: e?.stack,
+    });
     return res.status(500).json({
       error: e?.message || 'Failed to load students',
     });
   }
 });
-

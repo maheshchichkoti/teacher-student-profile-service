@@ -91,35 +91,66 @@ profileRouter.get(
   requireAuth,
   verifyTeacherOwnsStudent,
   async (req, res) => {
-    const studentId = Number(req.params.studentId);
-    if (!Number.isFinite(studentId) || studentId <= 0) {
-      return res.status(400).json({ error: 'Invalid studentId' });
-    }
+    try {
+      const studentId = Number(req.params.studentId);
+      if (!Number.isFinite(studentId) || studentId <= 0) {
+        return res.status(400).json({ error: 'Invalid studentId' });
+      }
 
-    await ensureSnapshotRow(studentId);
-    let row = await getSnapshot(studentId);
-    const staleMs = config.metricsStaleAfterSec * 1000;
-    const mtime = row?.metricsUpdatedAt
-      ? new Date(row.metricsUpdatedAt).getTime()
-      : 0;
-    const genStuck =
-      row?.status === 'generating' &&
-      row?.updatedAt &&
-      Date.now() - new Date(row.updatedAt).getTime() > 180_000;
-    const needsRefresh =
-      ['pending', 'failed'].includes(row?.status) ||
-      genStuck ||
-      (row?.status !== 'generating' &&
-        (!Number.isFinite(mtime) || Date.now() - mtime > staleMs));
+      console.log('[profile] request', {
+        studentId,
+        teacherId: req.headers['x-teacher-id'] || null,
+      });
 
-    if (needsRefresh) {
-      setImmediate(() => {
-        refreshStudentProfile(studentId).catch(() => {});
+      await ensureSnapshotRow(studentId);
+      let row = await getSnapshot(studentId);
+      const staleMs = config.metricsStaleAfterSec * 1000;
+      const mtime = row?.metricsUpdatedAt
+        ? new Date(row.metricsUpdatedAt).getTime()
+        : 0;
+      const genStuck =
+        row?.status === 'generating' &&
+        row?.updatedAt &&
+        Date.now() - new Date(row.updatedAt).getTime() > 180_000;
+      const needsRefresh =
+        ['pending', 'failed'].includes(row?.status) ||
+        genStuck ||
+        (row?.status !== 'generating' &&
+          (!Number.isFinite(mtime) || Date.now() - mtime > staleMs));
+
+      if (needsRefresh) {
+        setImmediate(() => {
+          refreshStudentProfile(studentId).catch((err) => {
+            console.error('[profile] background refresh failed', {
+              studentId,
+              message: err?.message,
+              stack: err?.stack,
+            });
+          });
+        });
+      }
+
+      row = await getSnapshot(studentId);
+      const payload = mapRowToApi(row);
+
+      console.log('[profile] success', {
+        studentId,
+        status: payload.status,
+        totalClasses: payload.totalClasses,
+      });
+
+      return res.json(payload);
+    } catch (e) {
+      console.error('[profile] failed', {
+        studentId: req.params.studentId,
+        teacherId: req.headers['x-teacher-id'] || null,
+        message: e?.message,
+        stack: e?.stack,
+      });
+      return res.status(500).json({
+        error: e?.message || 'Failed to load profile',
       });
     }
-
-    row = await getSnapshot(studentId);
-    return res.json(mapRowToApi(row));
   },
 );
 
@@ -128,15 +159,37 @@ profileRouter.post(
   requireAuth,
   verifyTeacherOwnsStudent,
   async (req, res) => {
-    const studentId = Number(req.params.studentId);
-    if (!Number.isFinite(studentId) || studentId <= 0) {
-      return res.status(400).json({ error: 'Invalid studentId' });
-    }
-    const skipLlm = req.query.skipLlm === '1' || req.query.skipLlm === 'true';
     try {
+      const studentId = Number(req.params.studentId);
+      if (!Number.isFinite(studentId) || studentId <= 0) {
+        return res.status(400).json({ error: 'Invalid studentId' });
+      }
+      const skipLlm = req.query.skipLlm === '1' || req.query.skipLlm === 'true';
+
+      console.log('[profile/refresh] request', {
+        studentId,
+        teacherId: req.headers['x-teacher-id'] || null,
+        skipLlm,
+      });
+
       const result = await refreshStudentProfile(studentId, { skipLlm });
-      return res.json(mapRowToApi(result));
+      const payload = mapRowToApi(result);
+
+      console.log('[profile/refresh] success', {
+        studentId,
+        status: payload.status,
+        totalClasses: payload.totalClasses,
+      });
+
+      return res.json(payload);
     } catch (e) {
+      console.error('[profile/refresh] failed', {
+        studentId: req.params.studentId,
+        teacherId: req.headers['x-teacher-id'] || null,
+        skipLlm: req.query.skipLlm,
+        message: e?.message,
+        stack: e?.stack,
+      });
       return res.status(500).json({
         error: e.message || 'Refresh failed',
       });

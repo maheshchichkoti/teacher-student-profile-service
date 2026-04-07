@@ -21,4 +21,6 @@ export const config = {
   internalApiSecret: process.env.INTERNAL_API_SECRET || '',
   summaryTtlDays: Number(process.env.SUMMARY_TTL_DAYS || 7),
   metricsStaleAfterSec: Number(process.env.METRICS_STALE_AFTER_SEC || 900),
+  profileAnalysisWindowDays: Number(process.env.PROFILE_ANALYSIS_WINDOW_DAYS || 90),
+  profileAnalysisMaxClasses: Number(process.env.PROFILE_ANALYSIS_MAX_CLASSES || 20),
 };

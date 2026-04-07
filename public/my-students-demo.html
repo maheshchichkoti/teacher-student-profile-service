@@ -34,6 +34,16 @@
       padding: 1rem 1.25rem;
       margin-bottom: 1rem;
     }
+    .stats { display:grid; gap:0.75rem; margin-bottom: 1rem; }
+    @media (min-width: 760px) { .stats { grid-template-columns: repeat(3, 1fr); } }
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.8rem 1rem;
+    }
+    .stat-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .stat-value { font-size: 1.25rem; font-weight: 700; margin-top: 0.2rem; }
     label { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.35rem; }
     input, select {
       width: 100%;
@@ -46,7 +56,7 @@
     }
     input:focus, select:focus { outline: 2px solid var(--accent); border-color: transparent; }
     .row { display: grid; gap: 1rem; }
-    @media (min-width: 760px) { .row.cols-4 { grid-template-columns: 1.2fr 1.6fr 1fr 1fr; } }
+    @media (min-width: 760px) { .row.cols-4 { grid-template-columns: 1.4fr 1fr auto; } }
     button {
       padding: 0.6rem 1.1rem;
       border-radius: 8px;
@@ -73,6 +83,16 @@
     .pager { display:flex; gap:0.5rem; align-items:center; }
     .link { color: var(--accent); text-decoration: none; }
     .link:hover { text-decoration: underline; }
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      object-fit: cover;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      margin-right: 0.5rem;
+    }
+    .student-cell { display:flex; align-items: center; }
   </style>
 </head>
 <body>
@@ -84,6 +104,21 @@
       </div>
       <div class="muted" style="font-size:0.9rem;">
         API: <code>/demo/my-students</code>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">Total Students</div>
+        <div id="statTotal" class="stat-value">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Active Students</div>
+        <div id="statActive" class="stat-value">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Page</div>
+        <div id="statPage" class="stat-value">—</div>
       </div>
     </div>
 
@@ -179,9 +214,10 @@
         const hours = esc(String(s.learningHours?.total ?? 0));
         const last = s.lastClassDays != null ? (esc(String(s.lastClassDays)) + ' days ago') : 'No classes yet';
         const link = '/student-profile-demo.html?studentId=' + encodeURIComponent(s.id);
+        const avatar = s.avatar ? '<img class="avatar" src="' + esc(s.avatar) + '" alt="' + name + '">' : '<div class="avatar"></div>';
         return (
           '<tr>' +
-            '<td><div><div style=\"font-weight:600;\">' + name + '</div><div class=\"muted\" style=\"font-size:0.85rem;\">ID ' + esc(String(s.id)) + '</div></div></td>' +
+            '<td><div class="student-cell">' + avatar + '<div><div style=\"font-weight:600;\">' + name + '</div><div class=\"muted\" style=\"font-size:0.85rem;\">ID ' + esc(String(s.id)) + '</div></div></div></td>' +
             '<td>' + level + '</td>' +
             '<td>' + total + '</td>' +
             '<td>' + hours + '</td>' +
@@ -229,9 +265,13 @@
 
         renderRows(data);
         const pg = data.pagination || {};
+        const metrics = data.metrics || {};
         $('statusText').textContent =
           'Page ' + (pg.currentPage || page) + ' of ' + (pg.totalPages || 1) +
           ' · Total students: ' + (pg.totalStudents ?? '—');
+        $('statTotal').textContent = String(pg.totalStudents ?? metrics.totalStudents ?? '—');
+        $('statActive').textContent = String(metrics.activeStudents ?? '—');
+        $('statPage').textContent = String((pg.currentPage || page) + ' / ' + (pg.totalPages || 1));
 
         const totalPages = Number(pg.totalPages || 1);
         $('prevBtn').disabled = page <= 1;

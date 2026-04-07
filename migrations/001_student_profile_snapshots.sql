@@ -1,22 +1,50 @@
--- Task 1 read model — aligns with docs/plans/2026-04-02-task-1-student-profile-snapshot.md
-CREATE TABLE IF NOT EXISTS student_profile_snapshots (
-  student_id INT UNSIGNED NOT NULL PRIMARY KEY,
-  status ENUM('pending','generating','ready','failed') NOT NULL DEFAULT 'pending',
-  english_level VARCHAR(255) NULL,
-  total_classes INT UNSIGNED NOT NULL DEFAULT 0,
-  total_words_learned INT UNSIGNED NOT NULL DEFAULT 0,
-  learning_goal TEXT NULL,
-  weak_words JSON NULL,
-  grammar_topics JSON NULL,
-  ai_summary TEXT NULL,
-  input_hash CHAR(64) NULL,
-  metrics_updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  summary_updated_at DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00',
-  last_analysis_at DATETIME NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_profile_snapshot_student
-    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
-  INDEX idx_snapshot_status_summary (status, summary_updated_at),
-  INDEX idx_snapshot_last_analysis (last_analysis_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- Task 1 read model (Postgres)
+-- Aligned with lessonscope serve-schema profile tables and LLM raw pipeline.
+
+CREATE SCHEMA IF NOT EXISTS serve;
+
+CREATE TABLE IF NOT EXISTS serve.student_profile_snapshots (
+  student_id integer PRIMARY KEY,
+  status text NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'generating', 'ready', 'failed')),
+  english_level text,
+  total_classes integer NOT NULL DEFAULT 0 CHECK (total_classes >= 0),
+  total_words_learned integer NOT NULL DEFAULT 0 CHECK (total_words_learned >= 0),
+  learning_goal text,
+  weak_words jsonb,
+  grammar_topics jsonb,
+  ai_summary text,
+  input_hash varchar(64),
+  metrics_updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  summary_updated_at timestamp with time zone NOT NULL DEFAULT to_timestamp(0),
+  last_analysis_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_student_profile_snapshots_status_summary
+  ON serve.student_profile_snapshots (status, summary_updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_student_profile_snapshots_last_analysis
+  ON serve.student_profile_snapshots (last_analysis_at);
+
+CREATE INDEX IF NOT EXISTS idx_student_profile_snapshots_metrics_updated
+  ON serve.student_profile_snapshots (metrics_updated_at);
+
+CREATE OR REPLACE FUNCTION serve.set_updated_at_student_profile_snapshots()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_set_updated_at_student_profile_snapshots
+  ON serve.student_profile_snapshots;
+
+CREATE TRIGGER trg_set_updated_at_student_profile_snapshots
+BEFORE UPDATE ON serve.student_profile_snapshots
+FOR EACH ROW
+EXECUTE FUNCTION serve.set_updated_at_student_profile_snapshots();

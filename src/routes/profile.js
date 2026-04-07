@@ -3,12 +3,20 @@ import { config } from '../config.js';
 import { query } from '../db/mysql.js';
 import { ensureSnapshotRow, getSnapshot, parseSnapshotRow } from '../snapshotRepo.js';
 import { refreshStudentProfile } from '../worker.js';
+import {
+  summaryDisplayFromRow,
+  weakWordsForApi,
+} from '../profileApiShape.js';
 
 export const profileRouter = Router();
 
 function requireAuth(req, res, next) {
+  // Demo-first: no bearer token required.
+  // If a secret is configured AND the caller provides an Authorization header,
+  // enforce it. Otherwise allow the request (for local demo UI).
   if (!config.internalApiSecret) return next();
   const h = req.headers.authorization || '';
+  if (!h) return next();
   if (h !== `Bearer ${config.internalApiSecret}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -49,6 +57,8 @@ function mapRowToApi(row) {
       totalClasses: 0,
       learningGoal: null,
       aiSummary: null,
+      summaryDisplay: 'Generating summary...',
+      lastAnalysisAt: null,
       metricsUpdatedAt: null,
       summaryUpdatedAt: null,
     };
@@ -58,11 +68,15 @@ function mapRowToApi(row) {
     status: r.status,
     englishLevel: r.englishLevel,
     totalWordsLearned: Number(r.totalWordsLearned || 0),
-    weakWords: r.weakWords,
+    weakWords: weakWordsForApi(r.weakWords),
     grammarTopics: r.grammarTopics,
     totalClasses: Number(r.totalClasses || 0),
     learningGoal: r.learningGoal,
     aiSummary: r.aiSummary,
+    summaryDisplay: summaryDisplayFromRow(r),
+    lastAnalysisAt: r.lastAnalysisAt
+      ? new Date(r.lastAnalysisAt).toISOString()
+      : null,
     metricsUpdatedAt: r.metricsUpdatedAt
       ? new Date(r.metricsUpdatedAt).toISOString()
       : null,

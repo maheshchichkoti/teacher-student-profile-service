@@ -1,34 +1,53 @@
-import { query, queryPositional } from './db/mysql.js';
+import { query } from './db/mysql.js';
+import { getPgPool } from './db/postgres.js';
+import { normalizeZoomMeetingId } from './meetingId.js';
+import { fetchSessionEnrichment } from './enrichmentPg.js';
+import {
+  grammarPointsFromParsed,
+  levelFromParsed,
+  parseJsonValue,
+  pronunciationFlagsFromParsed,
+  vocabularyTokensFromParsed,
+} from './parsedResponseExtractors.js';
 
-function parseJsonField(v) {
-  if (v == null) return null;
-  if (Array.isArray(v)) return v;
-  if (typeof v === 'string') {
-    try {
-      return JSON.parse(v);
-    } catch {
-      return null;
+function mergeWeakFromPronunciationFlags(flagRows) {
+  /** @type {Map<string, { word: string, mistakeCount: number, issue: string }>} */
+  const byWord = new Map();
+  for (const row of flagRows) {
+    const word =
+      (row.word != null && String(row.word).trim()) ||
+      (row.item != null && String(row.item).trim()) ||
+      '';
+    if (!word) continue;
+    const count = Number(row.count ?? row.mistake_count ?? 0);
+    if (count < 2) continue;
+    const issueRaw =
+      row.issue ??
+      row.type ??
+      row.label ??
+      row.problem ??
+      row.flag_type ??
+      '';
+    const issue =
+      issueRaw != null && String(issueRaw).trim()
+        ? String(issueRaw).trim().slice(0, 80)
+        : 'pronunciation';
+    const key = word.toLowerCase();
+    const prev = byWord.get(key);
+    if (!prev || count > prev.mistakeCount) {
+      byWord.set(key, { word, mistakeCount: count, issue });
     }
   }
-  return null;
-}
-
-function normalizeGrammarTopics(rows) {
-  const set = new Map();
-  for (const r of rows) {
-    const gp = parseJsonField(r.grammar_points);
-    if (!Array.isArray(gp)) continue;
-    for (const item of gp) {
-      if (typeof item === 'string' && item.trim()) {
-        const k = item.trim();
-        if (!set.has(k.toLowerCase())) set.set(k.toLowerCase(), k);
-      } else if (item && typeof item === 'object' && item.topic) {
-        const k = String(item.topic).trim();
-        if (k && !set.has(k.toLowerCase())) set.set(k.toLowerCase(), k);
-      }
-    }
-  }
-  return [...set.values()].sort();
+  return [...byWord.values()]
+    .sort((a, b) => b.mistakeCount - a.mistakeCount || a.word.localeCompare(b.word))
+    .slice(0, 50)
+    .map((w) => ({
+      itemId: w.word,
+      gameType: 'pronunciation_flag',
+      mistakeCount: w.mistakeCount,
+      item: w.word,
+      issue: w.issue,
+    }));
 }
 
 /**
@@ -89,81 +108,77 @@ export async function aggregateStudentMetrics(studentId) {
   const ug = goalUserGoal?.goal_name?.trim() || '';
   const learningGoal = classGoal || whatLearn || ug || null;
 
-  const [prog] = await query(
-    `SELECT vocabulary_mastered, current_level
-     FROM student_progress
-     WHERE student_id = :sid
-     LIMIT 1`,
-    { sid },
-  );
-
-  const totalWordsLearned = Number(prog?.vocabulary_mastered ?? 0);
-  let englishLevel = prog?.current_level?.trim() || null;
-  if (!englishLevel && userRow?.student_level) {
-    const sl = String(userRow.student_level).trim();
-    if (sl) englishLevel = sl.slice(0, 50);
-  }
-
-  const weakRows = await query(
-    `SELECT item_id AS itemId, game_type AS gameType, user_answer AS userAnswer,
-            mistake_count AS mistakeCount
-     FROM user_mistakes
-     WHERE user_id = :sid AND mistake_count >= 2
-     ORDER BY last_answered_at DESC
-     LIMIT 50`,
-    { sid },
-  );
-
-  const weakWords = weakRows.map((w) => ({
-    itemId: w.itemId,
-    gameType: w.gameType,
-    mistakeCount: Number(w.mistakeCount || 0),
-    item:
-      (w.userAnswer && String(w.userAnswer).trim()) ||
-      w.itemId ||
-      '(unknown)',
-  }));
+  let englishLevel = userRow?.student_level ? String(userRow.student_level).trim().slice(0, 50) : null;
 
   const timeline = await query(
-    `SELECT zoom_meeting_id AS zoomMeetingId, meeting_start AS meetingStart
+    `SELECT zoom_meeting_id AS zoomMeetingId,
+            admin_url AS adminUrl,
+            join_url AS joinUrl,
+            meeting_start AS meetingStart,
+            meeting_end AS meetingEnd
      FROM classes
      WHERE student_id = :sid
-       AND status = 'ended'
+       AND status IN ('ended', 'completed')
        AND is_present = 1
-       AND zoom_meeting_id IS NOT NULL
-       AND zoom_meeting_id != ''
      ORDER BY meeting_start DESC
      LIMIT 20`,
     { sid },
   );
 
-  const meetingIds = [...new Set(timeline.map((t) => t.zoomMeetingId).filter(Boolean))];
+  const grammarSet = new Map();
+  const vocabAll = new Set();
+  const pronunciationFlagRows = [];
+  let lastAnalysisMs = null;
 
-  let grammarTopics = [];
-  let lastAnalysisAt = null;
+  const pgConfigured = Boolean(getPgPool());
 
-  if (meetingIds.length > 0) {
-    const placeholders = meetingIds.map(() => '?').join(',');
-    const analysisRows = await queryPositional(
-      `SELECT grammar_points AS grammar_points, level AS level, created_at AS createdAt
-       FROM llm_audio_analyses
-       WHERE zoom_meeting_id IN (${placeholders})
-       ORDER BY created_at DESC`,
-      meetingIds,
+  for (const row of timeline) {
+    const meetingId = normalizeZoomMeetingId(
+      row.zoomMeetingId,
+      row.adminUrl,
+      row.joinUrl,
     );
+    if (!meetingId || !row.meetingStart) continue;
 
-    grammarTopics = normalizeGrammarTopics(analysisRows);
+    if (!pgConfigured) continue;
 
-    for (const r of analysisRows) {
-      if (r.createdAt) {
-        const t = new Date(r.createdAt).getTime();
-        if (!lastAnalysisAt || t > lastAnalysisAt) lastAnalysisAt = t;
-      }
-      if (!englishLevel && r.level) {
-        englishLevel = String(r.level).trim().slice(0, 255);
+    let enrichment;
+    try {
+      enrichment = await fetchSessionEnrichment(meetingId, row.meetingStart, row.meetingEnd);
+    } catch {
+      continue;
+    }
+    if (!enrichment) continue;
+
+    const pr = parseJsonValue(enrichment.parsed_response);
+    if (!pr) continue;
+
+    for (const g of grammarPointsFromParsed(pr)) {
+      if (!grammarSet.has(g.toLowerCase())) grammarSet.set(g.toLowerCase(), g);
+    }
+    for (const t of vocabularyTokensFromParsed(pr)) {
+      vocabAll.add(t.toLowerCase());
+    }
+    for (const f of pronunciationFlagsFromParsed(pr)) {
+      if (f && typeof f === 'object') pronunciationFlagRows.push(f);
+    }
+
+    if (!englishLevel) {
+      const lvl = levelFromParsed(pr);
+      if (lvl) englishLevel = lvl;
+    }
+
+    if (enrichment.recording_start) {
+      const t = new Date(enrichment.recording_start).getTime();
+      if (!Number.isNaN(t) && (!lastAnalysisMs || t > lastAnalysisMs)) {
+        lastAnalysisMs = t;
       }
     }
   }
+
+  const grammarTopics = [...grammarSet.values()].sort((a, b) => a.localeCompare(b));
+  const totalWordsLearned = vocabAll.size;
+  const weakWords = mergeWeakFromPronunciationFlags(pronunciationFlagRows);
 
   return {
     studentId: sid,
@@ -173,7 +188,7 @@ export async function aggregateStudentMetrics(studentId) {
     grammarTopics,
     totalClasses,
     learningGoal,
-    lastAnalysisAt: lastAnalysisAt ? new Date(lastAnalysisAt).toISOString() : null,
+    lastAnalysisAt: lastAnalysisMs ? new Date(lastAnalysisMs).toISOString() : null,
   };
 }
 
@@ -189,6 +204,7 @@ export function metricsPayloadForHash(m) {
         itemId: w.itemId,
         gameType: w.gameType,
         mistakeCount: w.mistakeCount,
+        issue: w.issue,
       }))
       .sort((a, b) => `${a.gameType}:${a.itemId}`.localeCompare(`${b.gameType}:${b.itemId}`)),
   };

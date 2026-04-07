@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Demo — Student snapshot</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4f;
+      --text: #e6edf3;
+      --muted: #8b9cad;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --danger: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    .wrap { max-width: 900px; margin: 0 auto; padding: 1.5rem; }
+    h1 { font-size: 1.35rem; font-weight: 600; margin: 0 0 0.5rem; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 1.25rem; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    label { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.35rem; }
+    input {
+      width: 100%;
+      padding: 0.55rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    .row { display: grid; gap: 1rem; margin-bottom: 1rem; }
+    @media (min-width: 560px) { .row { grid-template-columns: 1fr 1fr; } }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-top: 1rem; }
+    button {
+      padding: 0.6rem 1.1rem;
+      border-radius: 8px;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: var(--border); color: var(--text); }
+    .err { color: var(--danger); font-size: 0.9rem; white-space: pre-wrap; }
+    .grid { display: grid; gap: 0.75rem; }
+    @media (min-width: 560px) { .grid.cols-2 { grid-template-columns: 1fr 1fr; } }
+    .metric { padding: 0.75rem; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
+    .metric k { display: block; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+    .metric v { font-size: 1rem; margin-top: 0.25rem; word-break: break-word; }
+    .summary { font-size: 1rem; line-height: 1.6; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { text-align: left; padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 500; }
+    pre { margin: 0; font-size: 0.75rem; overflow: auto; max-height: 320px; background: var(--bg); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border); }
+    .badge { display: inline-block; font-size: 0.7rem; padding: 0.2rem 0.45rem; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div style="display:flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: baseline;">
+      <div>
+        <h1>Student profile snapshot <span class="badge">demo</span></h1>
+        <p class="sub">Loads Task 1 snapshot JSON and shows `summaryDisplay` exactly as the main UI would render it.</p>
+      </div>
+      <div class="sub" style="margin:0;">
+        <a id="backLink" href="/my-students-demo.html">← Back to student list</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label for="studentId">Student ID</label>
+          <input id="studentId" type="text" placeholder="e.g. 123" autocomplete="off" />
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" id="loadBtn">Load snapshot</button>
+        <button type="button" id="refreshBtn" class="secondary">Refresh (sync)</button>
+      </div>
+      <p id="statusText" class="sub" style="margin: 1rem 0 0;"></p>
+      <p id="errorText" class="err" style="display:none;"></p>
+    </div>
+
+    <div id="result" style="display:none;">
+      <div class="card">
+        <h2 style="font-size:1rem; margin:0 0 0.75rem;">Summary for UI (`summaryDisplay`)</h2>
+        <p id="summaryDisplay" class="summary"></p>
+      </div>
+      <div class="card">
+        <h2 style="font-size:1rem; margin:0 0 0.75rem;">Key metrics</h2>
+        <div class="grid cols-2" id="metricsGrid"></div>
+      </div>
+      <div class="card">
+        <h2 style="font-size:1rem; margin:0 0 0.75rem;">Weak words</h2>
+        <div id="weakTable"></div>
+      </div>
+      <div class="card">
+        <h2 style="font-size:1rem; margin:0 0 0.75rem;">Raw JSON</h2>
+        <pre id="rawJson"></pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function headers() {
+      return { Accept: 'application/json' };
+    }
+
+    function showErr(msg) {
+      const el = $('errorText');
+      if (msg) { el.textContent = msg; el.style.display = 'block'; }
+      else { el.textContent = ''; el.style.display = 'none'; }
+    }
+
+    function esc(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');
+    }
+
+    function render(data) {
+      $('result').style.display = 'block';
+      $('summaryDisplay').textContent = data.summaryDisplay || data.aiSummary || '—';
+
+      const metrics = [
+        ['englishLevel', data.englishLevel],
+        ['totalWordsLearned', data.totalWordsLearned],
+        ['totalClasses', data.totalClasses],
+        ['learningGoal', data.learningGoal],
+        ['grammarTopics', Array.isArray(data.grammarTopics) ? data.grammarTopics.join(', ') : data.grammarTopics],
+        ['status', data.status],
+        ['lastAnalysisAt', data.lastAnalysisAt],
+        ['metricsUpdatedAt', data.metricsUpdatedAt],
+        ['summaryUpdatedAt', data.summaryUpdatedAt],
+      ];
+      $('metricsGrid').innerHTML = metrics.map(([k, v]) =>
+        '<div class="metric"><k>' + esc(k) + '</k><v>' + (v == null || v === '' ? '—' : esc(String(v))) + '</v></div>'
+      ).join('');
+
+      const weak = Array.isArray(data.weakWords) ? data.weakWords : [];
+      if (weak.length === 0) {
+        $('weakTable').innerHTML = '<p class="sub" style="margin:0;">None in snapshot.</p>';
+      } else {
+        $('weakTable').innerHTML =
+          '<table><thead><tr><th>Word</th><th>Count</th><th>Issue</th></tr></thead><tbody>' +
+          weak.map((w) =>
+            '<tr><td>' + esc(w.word ?? '') + '</td><td>' + esc(w.count ?? '') + '</td><td>' + esc(w.issue ?? '—') + '</td></tr>'
+          ).join('') +
+          '</tbody></table>';
+      }
+      $('rawJson').textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function loadProfile(refresh) {
+      const sid = $('studentId').value.trim();
+      if (!sid) { showErr('Enter a student ID.'); return; }
+      showErr('');
+      $('loadBtn').disabled = $('refreshBtn').disabled = true;
+      $('statusText').textContent = refresh ? 'Refreshing…' : 'Loading…';
+      try {
+        const url = refresh
+          ? '/v1/teachers/students/' + encodeURIComponent(sid) + '/profile/refresh'
+          : '/v1/teachers/students/' + encodeURIComponent(sid) + '/profile';
+        const res = await fetch(url, {
+          method: refresh ? 'POST' : 'GET',
+          headers: { ...headers(), ...(refresh ? { 'Content-Type': 'application/json' } : {}) },
+          body: refresh ? '{}' : undefined,
+        });
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); } catch (_) { data = { error: text }; }
+        if (!res.ok) {
+          showErr('HTTP ' + res.status + '\\n' + (typeof data === 'object' ? JSON.stringify(data, null, 2) : text));
+          $('result').style.display = 'none';
+          return;
+        }
+        render(data);
+        $('statusText').textContent = 'OK · ' + (refresh ? 'refresh' : 'GET');
+      } catch (e) {
+        showErr(String(e.message || e));
+        $('result').style.display = 'none';
+      } finally {
+        $('loadBtn').disabled = $('refreshBtn').disabled = false;
+      }
+    }
+
+    function initFromQuery() {
+      const p = new URLSearchParams(window.location.search);
+      const sid = p.get('studentId');
+      if (sid) $('studentId').value = sid;
+      if (sid) loadProfile(false);
+    }
+
+    $('loadBtn').addEventListener('click', () => loadProfile(false));
+    $('refreshBtn').addEventListener('click', () => loadProfile(true));
+    initFromQuery();
+  </script>
+</body>
+</html>
+

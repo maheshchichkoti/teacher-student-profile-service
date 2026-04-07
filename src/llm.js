@@ -1,11 +1,16 @@
-import Anthropic from '@anthropic-ai/sdk';
-import OpenAI from 'openai';
-
 /**
+ * Task 1 teacher summary — Gemini only (Google Generative Language API).
  * @param {object} metrics from aggregateStudentMetrics
  * @returns {Promise<string>}
  */
 export async function generateTeacherSummary(metrics) {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey?.trim()) {
+    throw new Error(
+      'GEMINI_API_KEY is required for the AI summary (Gemini is the only configured provider for this service).',
+    );
+  }
+
   const block = {
     englishLevel: metrics.englishLevel,
     totalWordsLearned: metrics.totalWordsLearned,
@@ -13,9 +18,9 @@ export async function generateTeacherSummary(metrics) {
     learningGoal: metrics.learningGoal,
     grammarTopicsCovered: metrics.grammarTopics,
     weakVocabulary: metrics.weakWords.map((w) => ({
-      wordOrItem: w.item,
-      mistakeCount: w.mistakeCount,
-      gameType: w.gameType,
+      word: w.item ?? w.word ?? w.itemId,
+      count: w.mistakeCount,
+      issue: w.issue ?? w.gameType,
     })),
   };
 
@@ -29,35 +34,28 @@ Rules:
 
   const user = `Use only this JSON data:\n${JSON.stringify(block, null, 2)}`;
 
-  if (process.env.ANTHROPIC_API_KEY) {
-    const client = new Anthropic();
-    const msg = await client.messages.create({
-      model: process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022',
-      max_tokens: 500,
-      system,
-      messages: [{ role: 'user', content: user }],
-    });
-    const text = msg.content?.find((c) => c.type === 'text')?.text?.trim();
-    if (!text) throw new Error('Empty Claude response');
-    return text;
-  }
-
-  if (process.env.OPENAI_API_KEY) {
-    const client = new OpenAI();
-    const completion = await client.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      max_tokens: 500,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
+  const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(geminiKey)}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [{ text: `${system}\n\n${user}` }],
+        },
       ],
-    });
-    const text = completion.choices[0]?.message?.content?.trim();
-    if (!text) throw new Error('Empty OpenAI response');
-    return text;
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`Gemini HTTP ${res.status}: ${errText.slice(0, 200)}`);
   }
-
-  throw new Error(
-    'No LLM configured: set ANTHROPIC_API_KEY or OPENAI_API_KEY',
-  );
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts
+    ?.map((p) => p.text)
+    .join('')
+    ?.trim();
+  if (!text) throw new Error('Empty Gemini response');
+  return text;
 }

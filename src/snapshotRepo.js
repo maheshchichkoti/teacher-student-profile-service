@@ -56,8 +56,8 @@ export async function updateSnapshotMetrics(studentId, metrics, inputHash) {
       totalClasses: metrics.totalClasses,
       totalWordsLearned: metrics.totalWordsLearned,
       learningGoal: metrics.learningGoal,
-      weakWords: metrics.weakWords,
-      grammarTopics: metrics.grammarTopics,
+      weakWords: metrics.weakWords ?? [],
+      grammarTopics: metrics.grammarTopics ?? [],
       inputHash,
       lastAnalysisAt: metrics.lastAnalysisAt
         ? metrics.lastAnalysisAt.replace('T', ' ').slice(0, 19)

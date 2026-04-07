@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Demo — My Students</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4f;
+      --text: #e6edf3;                                  
+      --muted: #8b9cad;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --danger: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+    h1 { font-size: 1.35rem; font-weight: 600; margin: 0 0 0.25rem; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 1.25rem; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    label { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.35rem; }
+    input, select {
+      width: 100%;
+      padding: 0.55rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    input:focus, select:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    .row { display: grid; gap: 1rem; }
+    @media (min-width: 760px) { .row.cols-4 { grid-template-columns: 1.2fr 1.6fr 1fr 1fr; } }
+    button {
+      padding: 0.6rem 1.1rem;
+      border-radius: 8px;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+    button:hover { background: var(--accent-hover); }
+    button.secondary { background: var(--border); color: var(--text); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; }
+    .err { color: var(--danger); font-size: 0.9rem; white-space: pre-wrap; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.65rem 0.5rem; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; }
+    tr:hover { background: rgba(255,255,255,0.03); }
+    .muted { color: var(--muted); }
+    .pill { display:inline-block; padding:0.15rem 0.5rem; border:1px solid var(--border); border-radius: 999px; font-size:0.75rem; color: var(--muted); }
+    .topbar { display:flex; gap:0.75rem; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+    .pager { display:flex; gap:0.5rem; align-items:center; }
+    .link { color: var(--accent); text-decoration: none; }
+    .link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div>
+        <h1>My Students <span class="pill">demo</span></h1>
+        <p class="sub">Student list for Task 1 demo (from MySQL <code>classes</code> + <code>users</code>). No teacher ID needed.</p>
+      </div>
+      <div class="muted" style="font-size:0.9rem;">
+        API: <code>/demo/my-students</code>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row cols-4">
+        <div>
+          <label for="search">Search</label>
+          <input id="search" type="text" placeholder="name / email" autocomplete="off" />
+        </div>
+        <div>
+          <label for="sortBy">Sort by</label>
+          <select id="sortBy">
+            <option value="name">Name</option>
+            <option value="level">Level</option>
+            <option value="totalClasses">Total Classes</option>
+            <option value="learningHours">Learning Hours</option>
+            <option value="lastClass">Last Class</option>
+          </select>
+        </div>
+        <div class="actions">
+          <button type="button" id="loadBtn">Load</button>
+          <button type="button" id="prevBtn" class="secondary">Prev</button>
+          <button type="button" id="nextBtn" class="secondary">Next</button>
+        </div>
+      </div>
+      <p id="statusText" class="sub" style="margin: 1rem 0 0;"></p>
+      <p id="errorText" class="err" style="display:none;"></p>
+    </div>
+
+    <div class="card">
+      <div style="overflow:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th style="min-width: 220px;">Student</th>
+              <th>Level</th>
+              <th>Total Classes</th>
+              <th>Learning Hours</th>
+              <th>Last Class</th>
+              <th style="min-width: 160px;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="6" class="muted">Loading students…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let page = 1;
+    const limit = 10;
+
+    function showErr(msg) {
+      const el = $('errorText');
+      if (msg) { el.textContent = msg; el.style.display = 'block'; }
+      else { el.textContent = ''; el.style.display = 'none'; }
+    }
+
+    function qs() {
+      const p = new URLSearchParams(window.location.search);
+      return {
+        search: p.get('search') || '',
+        sortBy: p.get('sortBy') || 'name',
+        sortOrder: p.get('sortOrder') || 'desc',
+        page: Number(p.get('page') || '1') || 1,
+      };
+    }
+
+    function setQs(next) {
+      const p = new URLSearchParams(window.location.search);
+      for (const [k, v] of Object.entries(next)) {
+        if (v == null || v === '') p.delete(k);
+        else p.set(k, String(v));
+      }
+      const s = p.toString();
+      history.replaceState(null, '', s ? ('?' + s) : '');
+    }
+
+    function renderRows(data) {
+      const students = Array.isArray(data.students) ? data.students : [];
+      const tb = $('tbody');
+      if (students.length === 0) {
+        tb.innerHTML = '<tr><td colspan=\"6\" class=\"muted\">No students found.</td></tr>';
+        return;
+      }
+      tb.innerHTML = students.map((s) => {
+        const name = esc(s.name || ('Student ' + s.id));
+        const level = esc(s.level || '—');
+        const total = esc(String(s.totalClasses ?? 0));
+        const hours = esc(String(s.learningHours?.total ?? 0));
+        const last = s.lastClassDays != null ? (esc(String(s.lastClassDays)) + ' days ago') : 'No classes yet';
+        const link = '/student-profile-demo.html?studentId=' + encodeURIComponent(s.id);
+        return (
+          '<tr>' +
+            '<td><div><div style=\"font-weight:600;\">' + name + '</div><div class=\"muted\" style=\"font-size:0.85rem;\">ID ' + esc(String(s.id)) + '</div></div></td>' +
+            '<td>' + level + '</td>' +
+            '<td>' + total + '</td>' +
+            '<td>' + hours + '</td>' +
+            '<td>' + esc(last) + '</td>' +
+            '<td><a class=\"link\" href=\"' + link + '\">View snapshot</a></td>' +
+          '</tr>'
+        );
+      }).join('');
+    }
+
+    function esc(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');
+    }
+
+    async function load() {
+      showErr('');
+
+      const search = $('search').value.trim();
+      const sortBy = $('sortBy').value;
+      const sortOrder = 'desc';
+
+      $('loadBtn').disabled = $('prevBtn').disabled = $('nextBtn').disabled = true;
+      $('statusText').textContent = 'Loading…';
+      try {
+        const p = new URLSearchParams();
+        p.set('page', String(page));
+        p.set('limit', String(limit));
+        if (search) p.set('search', search);
+        if (sortBy) p.set('sortBy', sortBy);
+        p.set('sortOrder', sortOrder);
+
+        setQs({ search, sortBy, sortOrder, page });
+
+        const res = await fetch('/demo/my-students?' + p.toString(), {
+          headers: { Accept: 'application/json' },
+        });
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); } catch (_) { data = { error: text }; }
+        if (!res.ok) {
+          showErr('HTTP ' + res.status + '\\n' + JSON.stringify(data, null, 2));
+          $('statusText').textContent = '';
+          return;
+        }
+
+        renderRows(data);
+        const pg = data.pagination || {};
+        $('statusText').textContent =
+          'Page ' + (pg.currentPage || page) + ' of ' + (pg.totalPages || 1) +
+          ' · Total students: ' + (pg.totalStudents ?? '—');
+
+        const totalPages = Number(pg.totalPages || 1);
+        $('prevBtn').disabled = page <= 1;
+        $('nextBtn').disabled = page >= totalPages;
+      } catch (e) {
+        showErr(String(e.message || e));
+        $('statusText').textContent = '';
+      } finally {
+        $('loadBtn').disabled = false;
+      }
+    }
+
+    $('loadBtn').addEventListener('click', () => { page = 1; load(); });
+    $('prevBtn').addEventListener('click', () => { if (page > 1) { page -= 1; load(); } });
+    $('nextBtn').addEventListener('click', () => { page += 1; load(); });
+
+    // Init from query string for shareable demo links.
+    (function init() {
+      const init = qs();
+      if (init.search) $('search').value = init.search;
+      if (init.sortBy) $('sortBy').value = init.sortBy;
+      if (init.page) page = init.page;
+        load();
+    })();
+  </script>
+</body>
+</html>
+

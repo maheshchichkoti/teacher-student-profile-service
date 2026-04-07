@@ -11,6 +11,13 @@ export const config = {
     password: process.env.MYSQL_PASSWORD || '',
     database: process.env.MYSQL_DATABASE || 'tulkka',
   },
+  postgres: {
+    host: process.env.POSTGRES_HOST || '',
+    port: Number(process.env.POSTGRES_PORT || 5432),
+    user: process.env.POSTGRES_USER || 'postgres',
+    password: process.env.POSTGRES_PASSWORD || '',
+    database: process.env.POSTGRES_DB || 'postgres',
+  },
   internalApiSecret: process.env.INTERNAL_API_SECRET || '',
   summaryTtlDays: Number(process.env.SUMMARY_TTL_DAYS || 7),
   metricsStaleAfterSec: Number(process.env.METRICS_STALE_AFTER_SEC || 900),

@@ -65,8 +65,9 @@ export async function refreshStudentProfile(studentId, opts = {}) {
     if (reloaded.aiSummary) {
       return reloaded;
     }
-    await markSnapshotFailed(sid);
-    throw err;
+    // Metrics are already persisted as `ready`; do not flip snapshot to `failed`
+    // so the screen stays usable (Task 1: never block profile on summary).
+    return reloaded;
   }
 
   await updateSnapshotSummary(sid, summaryText);

@@ -254,6 +254,18 @@ export async function aggregateStudentMetrics(studentId) {
     ? (parsedResponseOk > 0 ? 'postgres_parsed_response_or_mysql_fallback' : 'mysql_user_fallback')
     : 'none';
 
+  const qualityImpactReasons = [];
+  if (timelineRowsCount === 0) qualityImpactReasons.push('no_recent_attended_classes_in_window');
+  if (pgConfigured && enrichmentMatched === 0 && timelineRowsCount > 0) {
+    qualityImpactReasons.push('no_matched_postgres_enrichment_for_recent_classes');
+  }
+  if (pgConfigured && enrichmentMatched > 0 && parsedResponseOk === 0) {
+    qualityImpactReasons.push('matched_enrichment_but_parsed_response_missing');
+  }
+  if (!englishLevel) qualityImpactReasons.push('english_level_missing_in_sources');
+  if (!learningGoal) qualityImpactReasons.push('learning_goal_missing_in_sources');
+  if (totalWordsLearned === 0) qualityImpactReasons.push('no_vocabulary_signals_from_parsed_sessions');
+
   console.log('[aggregate] result', {
     studentId: sid,
     totalClasses,
@@ -271,6 +283,7 @@ export async function aggregateStudentMetrics(studentId) {
     enrichmentMissed,
     parsedResponseMissing,
     parsedResponseOk,
+    qualityImpactReasons,
     enrichmentDebugSamples,
   });
 
@@ -283,6 +296,15 @@ export async function aggregateStudentMetrics(studentId) {
     totalClasses,
     learningGoal,
     lastAnalysisAt: lastAnalysisMs ? new Date(lastAnalysisMs).toISOString() : null,
+    qualityDiagnostics: {
+      qualityImpactReasons,
+      pgConfigured,
+      timelineRowsCount,
+      enrichmentMatched,
+      enrichmentMissed,
+      parsedResponseOk,
+      parsedResponseMissing,
+    },
   };
 }
 

@@ -20,6 +20,10 @@ export async function getSnapshot(studentId) {
             weak_words AS "weakWords",
             grammar_topics AS "grammarTopics",
             ai_summary AS "aiSummary",
+            provider,
+            model,
+            prompt_version AS "promptVersion",
+            generation_latency_ms AS "generationLatencyMs",
             input_hash AS "inputHash",
             metrics_updated_at AS "metricsUpdatedAt",
             summary_updated_at AS "summaryUpdatedAt",
@@ -75,17 +79,26 @@ export async function updateSnapshotMetrics(studentId, metrics, inputHash, summa
   );
 }
 
-export async function updateSnapshotSummary(studentId, text) {
+export async function updateSnapshotSummary(studentId, summaryResult) {
   const sid = Number(studentId);
+  const text = String(summaryResult?.text || '').trim();
+  const provider = summaryResult?.provider || 'gemini';
+  const model = summaryResult?.model || null;
+  const promptVersion = summaryResult?.promptVersion || 'v1';
+  const generationLatencyMs = Number(summaryResult?.generationLatencyMs || 0);
   await queryPg(
     `UPDATE serve.student_profile_snapshots
      SET ai_summary = $2,
+         provider = $3,
+         model = $4,
+         prompt_version = $5,
+         generation_latency_ms = $6,
          summary_updated_at = now(),
          metrics_status = 'ready',
          summary_status = 'ready',
          updated_at = now()
      WHERE student_id = $1`,
-    [sid, text],
+    [sid, text, provider, model, promptVersion, generationLatencyMs],
   );
 }
 

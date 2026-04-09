@@ -11,13 +11,9 @@ import {
 export const profileRouter = Router();
 
 function requireAuth(req, res, next) {
-  // Demo-first: no bearer token required.
-  // If a secret is configured AND the caller provides an Authorization header,
-  // enforce it. Otherwise allow the request (for local demo UI).
   if (!config.internalApiSecret) return next();
   const h = req.headers.authorization || '';
-  if (!h) return next();
-  if (h !== `Bearer ${config.internalApiSecret}`) {
+  if (!h || h !== `Bearer ${config.internalApiSecret}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   return next();

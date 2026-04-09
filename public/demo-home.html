@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Teacher Demo Home</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4f;
+      --text: #e6edf3;
+      --muted: #8b9cad;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 1.25rem;
+    }
+    .wrap {
+      width: 100%;
+      max-width: 920px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+    h1 { margin: 0 0 0.4rem; font-size: 1.4rem; }
+    .sub { margin: 0 0 1rem; color: var(--muted); }
+    .grid {
+      display: grid;
+      gap: 0.9rem;
+    }
+    @media (min-width: 860px) {
+      .grid { grid-template-columns: 1fr 1fr; }
+    }
+    .card {
+      background: #121a27;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+    }
+    .title { font-weight: 700; margin-bottom: 0.4rem; }
+    .desc { color: var(--muted); font-size: 0.92rem; min-height: 2.5rem; }
+    .actions {
+      display: flex;
+      gap: 0.6rem;
+      margin-top: 0.8rem;
+      flex-wrap: wrap;
+    }
+    a.btn {
+      text-decoration: none;
+      color: #fff;
+      background: var(--accent);
+      padding: 0.52rem 0.85rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    a.btn:hover { background: var(--accent-hover); }
+    a.btn.secondary {
+      color: var(--text);
+      background: #2d3a4f;
+    }
+    .note {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      padding-top: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Teacher Intelligence Demo</h1>
+    <p class="sub">Single entry point for lead verification of Task 1 and Task 2.</p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="title">Task 1 — Student Profile Snapshot</div>
+        <div class="desc">Student list -> profile snapshot with metrics and Gemini summary.</div>
+        <div class="actions">
+          <a class="btn" href="/my-students-demo.html">Open Student List</a>
+          <a class="btn secondary" href="/student-profile-demo.html">Open Snapshot Directly</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="title">Task 2 — Pre-Session Brief</div>
+        <div class="desc">Class-level pre-session brief with readiness, mistakes, and top 3 recommendations.</div>
+        <div class="actions">
+          <a class="btn" href="/pre-session-brief-demo.html">Open Pre-Session Brief</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      Tip for reviewers: start from this page and navigate using buttons only.
+    </div>
+  </div>
+</body>
+</html>

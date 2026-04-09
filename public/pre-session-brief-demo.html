@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Demo — Pre-session brief</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4f;
+      --text: #e6edf3;
+      --muted: #8b9cad;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --danger: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
+    h1 { font-size: 1.35rem; font-weight: 600; margin: 0 0 0.35rem; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    label { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.35rem; }
+    input {
+      width: 100%;
+      padding: 0.55rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    .row { display: grid; gap: 1rem; margin-bottom: 0.7rem; }
+    @media (min-width: 560px) { .row { grid-template-columns: 1fr auto auto; align-items: end; } }
+    button {
+      padding: 0.6rem 1.1rem;
+      border-radius: 8px;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+    button:hover { background: var(--accent-hover); }
+    button.secondary { background: var(--border); color: var(--text); }
+    .err { color: var(--danger); font-size: 0.9rem; white-space: pre-wrap; }
+    .grid { display: grid; gap: 0.75rem; }
+    @media (min-width: 760px) { .grid.cols-4 { grid-template-columns: repeat(4, 1fr); } }
+    .metric { padding: 0.75rem; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
+    .metric k { display:block; font-size:0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+    .metric v { font-size: 1rem; margin-top: 0.2rem; display:block; word-break: break-word; }
+    ul { margin: 0.4rem 0 0 1.2rem; padding: 0; }
+    li { margin-bottom: 0.3rem; }
+    pre {
+      margin: 0;
+      font-size: 0.75rem;
+      overflow: auto;
+      max-height: 320px;
+      background: var(--bg);
+      padding: 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      white-space: pre-wrap;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .badge { display: inline-block; font-size: 0.7rem; padding: 0.2rem 0.45rem; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div style="display:flex; justify-content: space-between; gap:1rem; flex-wrap: wrap; align-items: baseline;">
+      <div>
+        <h1>Pre-session brief <span class="badge">demo</span></h1>
+        <p class="sub">Task 2 standalone demo using <code>/v1/teachers/classes/:classId/pre-session-brief</code>.</p>
+      </div>
+      <div class="sub" style="margin:0;">
+        <a href="/demo-home.html">Demo Home</a>
+        <span style="margin:0 0.45rem;">·</span>
+        <a href="/my-students-demo.html">Task 1 Student List</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label for="classId">Class ID</label>
+          <input id="classId" value="" placeholder="e.g. 296451" />
+        </div>
+        <button id="loadBtn">Load brief</button>
+        <button id="refreshBtn" class="secondary">Refresh (sync)</button>
+      </div>
+      <p id="status" class="sub" style="margin:0.4rem 0 0;"></p>
+      <p id="errorText" class="err" style="display:none; margin:0;"></p>
+    </div>
+
+    <div class="card">
+      <div class="grid cols-4">
+        <div class="metric"><k>Status</k><v id="briefStatus">—</v></div>
+        <div class="metric"><k>Readiness</k><v id="readiness">—</v></div>
+        <div class="metric"><k>Generated</k><v id="generated">—</v></div>
+        <div class="metric"><k>Practice</k><v id="practice">—</v></div>
+      </div>
+      <div class="grid cols-4" style="margin-top:0.65rem;">
+        <div class="metric"><k>Readiness Score (0-100)</k><v id="readinessNumeric">—</v></div>
+        <div class="metric"><k>Confidence</k><v id="confidence">—</v></div>
+        <div class="metric"><k>Grammar Mistakes</k><v id="grammarMistakeCount">—</v></div>
+        <div class="metric"><k>Pronunciation Mistakes</k><v id="pronMistakeCount">—</v></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Brief text</h2>
+      <div id="briefText" class="sub" style="margin:0;">—</div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Last session summary</h2>
+      <div class="metric" style="margin-bottom:0.5rem;"><k>Topics</k><v id="topics">—</v></div>
+      <div class="metric" style="margin-bottom:0.5rem;"><k>Vocabulary</k><v id="vocab">—</v></div>
+      <div class="metric"><k>Grammar</k><v id="grammar">—</v></div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Practice detail (since last class)</h2>
+      <ul id="gameTypes"><li class="sub">—</li></ul>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Mistakes since last class</h2>
+      <ul id="mistakes"><li class="sub">—</li></ul>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Top 3 focus recommendations</h2>
+      <ul id="reco"><li class="sub">—</li></ul>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Raw JSON</h2>
+      <pre id="raw">—</pre>
+    </div>
+  </div>
+
+  <script>
+    function $(id) { return document.getElementById(id); }
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function showErr(msg) {
+      const el = $('errorText');
+      if (msg) { el.textContent = msg; el.style.display = 'block'; }
+      else { el.textContent = ''; el.style.display = 'none'; }
+    }
+    function list(el, items) {
+      if (!Array.isArray(items) || items.length === 0) {
+        el.innerHTML = '<li class="sub">None</li>';
+        return;
+      }
+      el.innerHTML = items.map((x) => '<li>' + esc(x) + '</li>').join('');
+    }
+    function render(data) {
+      $('briefStatus').textContent = data.status || '—';
+      $('readiness').textContent = data.readinessScore || '—';
+      $('generated').textContent = data.generatedAt || '—';
+      const p = data.appPracticeSinceLastClass || {};
+      $('practice').textContent = `games=${p.gamesPlayed || 0}, completed=${p.completedGames || 0}, types=${p.uniqueGameTypes || 0}`;
+      $('readinessNumeric').textContent = data.readinessNumeric != null ? String(data.readinessNumeric) : '—';
+      $('confidence').textContent = data.confidence || '—';
+      $('grammarMistakeCount').textContent = String(p.grammarMistakeCount || 0);
+      $('pronMistakeCount').textContent = String(p.pronunciationMistakeCount || 0);
+      $('briefText').textContent = data.briefText || 'Generating...';
+
+      const s = data.lastSessionSummary || {};
+      $('topics').textContent = (s.topics || []).join(', ') || '—';
+      $('vocab').textContent = (s.vocabulary || []).join(', ') || '—';
+      $('grammar').textContent = (s.grammar || []).join(', ') || '—';
+      list($('mistakes'), data.mistakesSinceLastClass || []);
+      list($('reco'), data.topFocusRecommendations || []);
+      list(
+        $('gameTypes'),
+        (p.topGameTypes || []).map((x) =>
+          `${x.gameType}: sessions=${x.sessions}, completed=${x.completed}, accuracy=${Math.round(Number(x.accuracy || 0))}%`,
+        ),
+      );
+      $('raw').textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function callApi(method, url) {
+      const res = await fetch(url, { method, cache: 'no-store' });
+      const text = await res.text();
+      let data = {};
+      try { data = text ? JSON.parse(text) : {}; } catch {}
+      if (!res.ok) {
+        const msg = (data && data.error) ? data.error : text || `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+      return data;
+    }
+
+    async function loadBrief(force) {
+      try {
+        showErr('');
+        const classId = Number($('classId').value);
+        if (!Number.isFinite(classId) || classId <= 0) {
+          throw new Error('Enter a valid class ID');
+        }
+        $('status').textContent = force ? 'Refreshing...' : 'Loading...';
+        const path = force
+          ? `/v1/teachers/classes/${classId}/pre-session-brief/refresh`
+          : `/v1/teachers/classes/${classId}/pre-session-brief`;
+        const method = force ? 'POST' : 'GET';
+        const data = await callApi(method, path);
+        render(data);
+        $('status').textContent = `OK · ${method}`;
+      } catch (e) {
+        showErr(e.message || 'Request failed');
+        $('status').textContent = '';
+      }
+    }
+
+    if (window.location.protocol === 'file:') {
+      showErr('Open this page via the running server, not as a local file. Use: http://localhost:3840/');
+    } else {
+      const p = new URLSearchParams(window.location.search);
+      const classId = p.get('classId');
+      if (classId) $('classId').value = classId;
+      if (classId) loadBrief(false);
+    }
+    $('loadBtn').addEventListener('click', () => loadBrief(false));
+    $('refreshBtn').addEventListener('click', () => loadBrief(true));
+  </script>
+</body>
+</html>

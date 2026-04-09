@@ -1,6 +1,9 @@
 # Teacher student profile service
 
-Task 1 — cached student profile snapshot (metrics + AI summary) for the teacher app.
+Task 1 + Task 2 — cached teacher-side intelligence:
+
+- **Task 1:** student profile snapshot (metrics + AI summary)
+- **Task 2:** pre-session class brief (last-session context + app practice + focus recommendations)
 
 Metrics follow the engineering rules in `docs/plans/2026-04-02-ai-teacher-intelligence-separate-repo.md`:
 
@@ -19,6 +22,7 @@ cp .env.example .env
 # raw LLM tables + serve.student_profile_snapshots live in Postgres
 # Apply the snapshot migration against Postgres:
 psql -h … -U … -d … -f migrations/001_student_profile_snapshots.sql
+psql -h … -U … -d … -f migrations/003_student_profile_snapshots_llmops.sql
 npm install
 ```
 
@@ -45,6 +49,8 @@ This service is a **Node/Express backend** with server-side secrets and external
    - optional: `GEMINI_MODEL`, `INTERNAL_API_SECRET`, `SUMMARY_TTL_DAYS`, `METRICS_STALE_AFTER_SEC`, `PROFILE_ANALYSIS_WINDOW_DAYS`, `PROFILE_ANALYSIS_MAX_CLASSES`
 5. Run the Postgres migration before first production use:
    - `migrations/001_student_profile_snapshots.sql`
+   - `migrations/002_teacher_pre_session_briefs.sql`
+   - `migrations/003_student_profile_snapshots_llmops.sql`
 
 If your databases are private, make sure Render can reach them via allowed IPs, peering, or a tunnel/VPN layer.
 
@@ -52,6 +58,9 @@ If your databases are private, make sure Render can reach them via allowed IPs, 
 - `GET /health` — liveness
 - `GET /v1/teachers/students/:studentId/profile` — JSON snapshot (requires `Authorization: Bearer <INTERNAL_API_SECRET>` when `INTERNAL_API_SECRET` is set; optional `X-Teacher-Id` enforces teacher–student class relationship)
 - `GET /demo/my-students` — demo-only student list endpoint (no auth; supports `page`, `limit`, `search`, `sortBy`, `sortOrder`)
+- `GET /v1/teachers/classes/:classId/pre-session-brief` — Task 2 brief read path
+- `POST /v1/teachers/classes/:classId/pre-session-brief/refresh` — Task 2 synchronous refresh
+- `GET /pre-session-brief-demo.html` — Task 2 standalone demo page
 
 **Response (Task 1):** `englishLevel`, `totalWordsLearned`, `weakWords` (`{ word, count, issue }`), `grammarTopics`, `totalClasses`, `learningGoal`, `aiSummary` (nullable), `summaryDisplay` (always show this in UI: real paragraph, or `Generating summary...`, or `Summary temporarily unavailable`), `metricsStatus`, `summaryStatus`, `lastAnalysisAt`, `metricsUpdatedAt`, `summaryUpdatedAt`.
 
@@ -65,6 +74,24 @@ There are **two lifecycle statuses**:
 **Standalone repo:** integrate the main teacher app only after approval; until then, use the demo page above or point a gateway at this service.
 
 **AI summary:** configured with **Gemini only** — set `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`). No Anthropic/OpenAI keys are used.
+
+Task 1 now stores LLMOps metadata in `serve.student_profile_snapshots`:
+
+- `provider`
+- `model`
+- `prompt_version`
+- `generation_latency_ms`
+
+## Task 2 brief sources
+
+- **Last session summary / mistakes:** Postgres `raw.llm_responses.parsed_response` via enrichment join.
+- **Practice since last class:** MySQL `game_sessions` + `game_results` (`started_at` window since previous attended class end).
+- **Mistake depth:** merged from lesson parsed-response flags and app-level wrong patterns (`game_results` by item/error type).
+- **Readiness score:** deterministic v2 using activity volume, completion quality, recency, and signal richness; returned as label (`HIGH/MEDIUM/LOW`) + numeric score.
+- **Confidence:** derived from data completeness (last class available, parsed summary available, game result depth, recent activity).
+- **Trial/demo class handling:** by default scheduler skips trial-like classes (`is_trial=1` or `demo_class_id IS NOT NULL` or `class_type='demo'`). Toggle with `PRE_SESSION_INCLUDE_TRIAL_CLASSES=1`.
+
+Pre-session scheduler runs every `PRE_SESSION_SCHEDULER_INTERVAL_SEC` (default 900s), scanning classes around ~2h before start and pre-generating briefs.
 
 - `POST /v1/teachers/students/:studentId/profile/refresh` — synchronous full refresh (`?skipLlm=1` skips LLM)
 

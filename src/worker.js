@@ -56,6 +56,14 @@ export async function refreshStudentProfile(studentId, opts = {}) {
 
     await updateSnapshotMetrics(sid, metrics, inputHash, needLlm ? 'pending' : 'ready');
 
+    if (metrics?.qualityDiagnostics?.qualityImpactReasons?.length) {
+      console.warn('[worker] task1 quality diagnostics', {
+        studentId: sid,
+        qualityImpactReasons: metrics.qualityDiagnostics.qualityImpactReasons,
+        diagnostics: metrics.qualityDiagnostics,
+      });
+    }
+
     const reloaded = parseSnapshotRow(await getSnapshot(sid));
     if (!reloaded) {
       await markMetricsFailed(sid);
@@ -77,10 +85,10 @@ export async function refreshStudentProfile(studentId, opts = {}) {
 
     await markSummaryGenerating(sid);
 
-    let summaryText;
+    let summaryResult;
     try {
       console.log('[worker] summary generation started', { studentId: sid });
-      summaryText = await generateTeacherSummary(metrics);
+      summaryResult = await generateTeacherSummary(metrics);
     } catch (err) {
       console.error('[worker] summary generation failed', {
         studentId: sid,
@@ -96,7 +104,7 @@ export async function refreshStudentProfile(studentId, opts = {}) {
       return parseSnapshotRow(await getSnapshot(sid));
     }
 
-    await updateSnapshotSummary(sid, summaryText);
+    await updateSnapshotSummary(sid, summaryResult);
     console.log('[worker] summary generation completed', { studentId: sid });
     return parseSnapshotRow(await getSnapshot(sid));
   })();

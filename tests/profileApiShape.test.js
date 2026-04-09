@@ -26,7 +26,7 @@ test('weakWordsForApi falls back issue to gameType', () => {
 test('summaryDisplayFromRow uses paragraph when present', () => {
   assert.equal(
     summaryDisplayFromRow({
-      status: 'ready',
+      summaryStatus: 'ready',
       aiSummary: 'One paragraph here.',
     }),
     'One paragraph here.',
@@ -35,14 +35,24 @@ test('summaryDisplayFromRow uses paragraph when present', () => {
 
 test('summaryDisplayFromRow failed without summary', () => {
   assert.equal(
-    summaryDisplayFromRow({ status: 'failed', aiSummary: null }),
+    summaryDisplayFromRow({ summaryStatus: 'failed', aiSummary: null }),
     'Summary temporarily unavailable',
   );
 });
 
 test('summaryDisplayFromRow generating placeholder', () => {
   assert.equal(
-    summaryDisplayFromRow({ status: 'ready', aiSummary: null }),
-    'Summary not available yet',
+    summaryDisplayFromRow({ summaryStatus: 'pending', aiSummary: null }),
+    'Generating summary...',
+  );
+});
+
+test('summaryDisplayFromRow hides stale summary text while summary is pending', () => {
+  assert.equal(
+    summaryDisplayFromRow({
+      summaryStatus: 'pending',
+      aiSummary: 'Old text should not be shown',
+    }),
+    'Generating summary...',
   );
 });

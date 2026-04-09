@@ -11,7 +11,8 @@ export async function getSnapshot(studentId) {
   const sid = Number(studentId);
   const rows = await queryPg(
     `SELECT student_id AS "studentId",
-            status,
+            metrics_status AS "metricsStatus",
+            summary_status AS "summaryStatus",
             english_level AS "englishLevel",
             total_classes AS "totalClasses",
             total_words_learned AS "totalWordsLearned",
@@ -35,18 +36,19 @@ export async function getSnapshot(studentId) {
 export async function ensureSnapshotRow(studentId) {
   const sid = Number(studentId);
   await queryPg(
-    `INSERT INTO serve.student_profile_snapshots (student_id, status)
-     VALUES ($1, 'pending')
+    `INSERT INTO serve.student_profile_snapshots (student_id, metrics_status, summary_status)
+     VALUES ($1, 'pending', 'pending')
      ON CONFLICT (student_id) DO NOTHING`,
     [sid],
   );
 }
 
-export async function updateSnapshotMetrics(studentId, metrics, inputHash) {
+export async function updateSnapshotMetrics(studentId, metrics, inputHash, summaryStatus = 'pending') {
   const sid = Number(studentId);
   await queryPg(
     `UPDATE serve.student_profile_snapshots
-     SET status = 'ready',
+     SET metrics_status = 'ready',
+         summary_status = $10,
          english_level = $2,
          total_classes = $3,
          total_words_learned = $4,
@@ -68,6 +70,7 @@ export async function updateSnapshotMetrics(studentId, metrics, inputHash) {
       JSON.stringify(metrics.grammarTopics ?? []),
       inputHash,
       metrics.lastAnalysisAt || null,
+      summaryStatus,
     ],
   );
 }
@@ -78,29 +81,66 @@ export async function updateSnapshotSummary(studentId, text) {
     `UPDATE serve.student_profile_snapshots
      SET ai_summary = $2,
          summary_updated_at = now(),
-         status = 'ready',
+         metrics_status = 'ready',
+         summary_status = 'ready',
          updated_at = now()
      WHERE student_id = $1`,
     [sid, text],
   );
 }
 
-export async function markSnapshotFailed(studentId) {
+export async function markMetricsFailed(studentId) {
   const sid = Number(studentId);
   await queryPg(
     `UPDATE serve.student_profile_snapshots
-     SET status = 'failed',
+     SET metrics_status = 'failed',
          updated_at = now()
      WHERE student_id = $1`,
     [sid],
   );
 }
 
-export async function markSnapshotGenerating(studentId) {
+export async function markMetricsGenerating(studentId) {
   const sid = Number(studentId);
   await queryPg(
     `UPDATE serve.student_profile_snapshots
-     SET status = 'generating',
+     SET metrics_status = 'generating',
+         updated_at = now()
+     WHERE student_id = $1`,
+    [sid],
+  );
+}
+
+export async function markSummaryGenerating(studentId) {
+  const sid = Number(studentId);
+  await queryPg(
+    `UPDATE serve.student_profile_snapshots
+     SET summary_status = 'generating',
+         updated_at = now()
+     WHERE student_id = $1`,
+    [sid],
+  );
+}
+
+export async function markSummaryFailed(studentId) {
+  const sid = Number(studentId);
+  await queryPg(
+    `UPDATE serve.student_profile_snapshots
+     SET summary_status = 'failed',
+         updated_at = now()
+     WHERE student_id = $1`,
+    [sid],
+  );
+}
+
+export async function markSummaryReady(studentId) {
+  const sid = Number(studentId);
+  await queryPg(
+    `UPDATE serve.student_profile_snapshots
+     SET summary_status = CASE
+           WHEN ai_summary IS NOT NULL AND btrim(ai_summary) <> '' THEN 'ready'
+           ELSE 'pending'
+         END,
          updated_at = now()
      WHERE student_id = $1`,
     [sid],
@@ -127,6 +167,8 @@ export function parseSnapshotRow(row) {
   }
   return {
     ...row,
+    metricsStatus: row.metricsStatus || 'pending',
+    summaryStatus: row.summaryStatus || 'pending',
     weakWords: weakWords || [],
     grammarTopics: grammarTopics || [],
   };

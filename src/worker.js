@@ -4,8 +4,11 @@ import {
   computeInputHash,
   ensureSnapshotRow,
   getSnapshot,
-  markSnapshotFailed,
-  markSnapshotGenerating,
+  markMetricsFailed,
+  markMetricsGenerating,
+  markSummaryFailed,
+  markSummaryGenerating,
+  markSummaryReady,
   parseSnapshotRow,
   updateSnapshotMetrics,
   updateSnapshotSummary,
@@ -31,22 +34,31 @@ export async function refreshStudentProfile(studentId, opts = {}) {
     await ensureSnapshotRow(sid);
     const existing = parseSnapshotRow(await getSnapshot(sid));
 
-    await markSnapshotGenerating(sid);
+    await markMetricsGenerating(sid);
 
     let metrics;
     try {
       metrics = await aggregateStudentMetrics(sid);
     } catch (e) {
-      await markSnapshotFailed(sid);
+      await markMetricsFailed(sid);
       throw e;
     }
 
     const inputHash = computeInputHash(metrics);
-    await updateSnapshotMetrics(sid, metrics, inputHash);
+    const needLlm =
+      !existing?.aiSummary ||
+      shouldRegenerateSummary({
+        newHash: inputHash,
+        prevHash: existing?.inputHash || null,
+        summaryUpdatedAt: existing?.summaryUpdatedAt,
+        lastAnalysisAt: metrics.lastAnalysisAt,
+      });
+
+    await updateSnapshotMetrics(sid, metrics, inputHash, needLlm ? 'pending' : 'ready');
 
     const reloaded = parseSnapshotRow(await getSnapshot(sid));
     if (!reloaded) {
-      await markSnapshotFailed(sid);
+      await markMetricsFailed(sid);
       throw new Error('Snapshot missing after metrics write');
     }
 
@@ -54,22 +66,16 @@ export async function refreshStudentProfile(studentId, opts = {}) {
       return reloaded;
     }
 
-    const needLlm =
-      !reloaded.aiSummary ||
-      shouldRegenerateSummary({
-        newHash: inputHash,
-        prevHash: existing?.inputHash || null,
-        summaryUpdatedAt: reloaded.summaryUpdatedAt,
-        lastAnalysisAt: reloaded.lastAnalysisAt,
-      });
-
     if (!needLlm) {
+      await markSummaryReady(sid);
       console.log('[worker] summary skipped (fresh)', {
         studentId: sid,
         hasSummary: Boolean(reloaded.aiSummary),
       });
-      return reloaded;
+      return parseSnapshotRow(await getSnapshot(sid));
     }
+
+    await markSummaryGenerating(sid);
 
     let summaryText;
     try {
@@ -81,12 +87,13 @@ export async function refreshStudentProfile(studentId, opts = {}) {
         message: err?.message,
         stack: err?.stack,
       });
+      await markSummaryFailed(sid);
       if (reloaded.aiSummary) {
-        return reloaded;
+        return parseSnapshotRow(await getSnapshot(sid));
       }
       // Metrics are already persisted as `ready`; do not flip snapshot to `failed`
       // so the screen stays usable (Task 1: never block profile on summary).
-      return reloaded;
+      return parseSnapshotRow(await getSnapshot(sid));
     }
 
     await updateSnapshotSummary(sid, summaryText);

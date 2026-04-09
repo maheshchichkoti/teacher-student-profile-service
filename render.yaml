@@ -1,0 +1,46 @@
+services:
+  - type: web
+    name: teacher-student-profile-service
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: MYSQL_HOST
+        sync: false
+      - key: MYSQL_PORT
+        sync: false
+      - key: MYSQL_USER
+        sync: false
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: MYSQL_DATABASE
+        sync: false
+      - key: POSTGRES_HOST
+        sync: false
+      - key: POSTGRES_PORT
+        sync: false
+      - key: POSTGRES_DB
+        sync: false
+      - key: POSTGRES_USER
+        sync: false
+      - key: POSTGRES_PASSWORD
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: INTERNAL_API_SECRET
+        sync: false
+      - key: SUMMARY_TTL_DAYS
+        value: 7
+      - key: METRICS_STALE_AFTER_SEC
+        value: 900
+      - key: PROFILE_ANALYSIS_WINDOW_DAYS
+        value: 90
+      - key: PROFILE_ANALYSIS_MAX_CLASSES
+        value: 20

@@ -166,12 +166,13 @@
         : '';
 
       const metrics = [
+        ['metricsStatus', data.metricsStatus],
+        ['summaryStatus', data.summaryStatus],
         ['englishLevel', data.englishLevel],
         ['totalWordsLearned', data.totalWordsLearned],
         ['totalClasses', data.totalClasses],
         ['learningGoal', data.learningGoal],
         ['grammarTopics', Array.isArray(data.grammarTopics) ? data.grammarTopics.join(', ') : data.grammarTopics],
-        ['status', data.status],
         ['lastAnalysisAt', data.lastAnalysisAt],
         ['metricsUpdatedAt', data.metricsUpdatedAt],
         ['summaryUpdatedAt', data.summaryUpdatedAt],
@@ -207,7 +208,12 @@
           const data = await res.json();
           render(data);
           $('statusText').textContent = 'OK · GET';
-          if (data.status !== 'pending' && data.status !== 'generating') {
+          if (
+            data.metricsStatus !== 'pending' &&
+            data.metricsStatus !== 'generating' &&
+            data.summaryStatus !== 'pending' &&
+            data.summaryStatus !== 'generating'
+          ) {
             return;
           }
         } catch (_) {
@@ -242,7 +248,15 @@
         }
         render(data);
         $('statusText').textContent = 'OK · ' + (refresh ? 'refresh' : 'GET');
-        if (!refresh && (data.status === 'pending' || data.status === 'generating')) {
+        if (
+          !refresh &&
+          (
+            data.metricsStatus === 'pending' ||
+            data.metricsStatus === 'generating' ||
+            data.summaryStatus === 'pending' ||
+            data.summaryStatus === 'generating'
+          )
+        ) {
           pollForFreshSnapshot(sid);
         }
       } catch (e) {

@@ -49,7 +49,8 @@ function mapRowToApi(row) {
   if (!r) {
     return {
       studentId: null,
-      status: 'pending',
+      metricsStatus: 'pending',
+      summaryStatus: 'pending',
       englishLevel: null,
       totalWordsLearned: 0,
       weakWords: [],
@@ -65,14 +66,15 @@ function mapRowToApi(row) {
   }
   return {
     studentId: r.studentId,
-    status: r.status,
+    metricsStatus: r.metricsStatus || 'pending',
+    summaryStatus: r.summaryStatus || 'pending',
     englishLevel: r.englishLevel,
     totalWordsLearned: Number(r.totalWordsLearned || 0),
     weakWords: weakWordsForApi(r.weakWords),
     grammarTopics: r.grammarTopics,
     totalClasses: Number(r.totalClasses || 0),
     learningGoal: r.learningGoal,
-    aiSummary: r.aiSummary,
+    aiSummary: (r.summaryStatus || 'pending') === 'ready' ? r.aiSummary : null,
     summaryDisplay: summaryDisplayFromRow(r),
     lastAnalysisAt: r.lastAnalysisAt
       ? new Date(r.lastAnalysisAt).toISOString()
@@ -108,14 +110,15 @@ profileRouter.get(
       const mtime = row?.metricsUpdatedAt
         ? new Date(row.metricsUpdatedAt).getTime()
         : 0;
+      const metricsStatus = row?.metricsStatus || 'pending';
       const genStuck =
-        row?.status === 'generating' &&
+        metricsStatus === 'generating' &&
         row?.updatedAt &&
         Date.now() - new Date(row.updatedAt).getTime() > 180_000;
       const needsRefresh =
-        ['pending', 'failed'].includes(row?.status) ||
+        ['pending', 'failed'].includes(metricsStatus) ||
         genStuck ||
-        (row?.status !== 'generating' &&
+        (metricsStatus !== 'generating' &&
           (!Number.isFinite(mtime) || Date.now() - mtime > staleMs));
 
       if (needsRefresh) {
@@ -135,7 +138,8 @@ profileRouter.get(
 
       console.log('[profile] success', {
         studentId,
-        status: payload.status,
+        metricsStatus: payload.metricsStatus,
+        summaryStatus: payload.summaryStatus,
         totalClasses: payload.totalClasses,
       });
 
@@ -177,7 +181,8 @@ profileRouter.post(
 
       console.log('[profile/refresh] success', {
         studentId,
-        status: payload.status,
+        metricsStatus: payload.metricsStatus,
+        summaryStatus: payload.summaryStatus,
         totalClasses: payload.totalClasses,
       });
 

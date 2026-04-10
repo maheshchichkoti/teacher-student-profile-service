@@ -124,11 +124,19 @@
         <div class="metric"><k>Grammar Mistakes</k><v id="grammarMistakeCount">—</v></div>
         <div class="metric"><k>Pronunciation Mistakes</k><v id="pronMistakeCount">—</v></div>
       </div>
+      <div class="grid cols-4" style="margin-top:0.65rem;">
+        <div class="metric"><k>Last App Activity</k><v id="lastActivityAt">—</v></div>
+      </div>
     </div>
 
     <div class="card">
       <h2 style="font-size:1rem; margin:0 0 0.6rem;">Brief text</h2>
       <div id="briefText" class="sub" style="margin:0;">—</div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Readiness explanation</h2>
+      <div id="readinessRationale" class="sub" style="margin:0;">—</div>
     </div>
 
     <div class="card">
@@ -154,6 +162,11 @@
     </div>
 
     <div class="card">
+      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Data limitations</h2>
+      <ul id="qualityReasons"><li class="sub">—</li></ul>
+    </div>
+
+    <div class="card">
       <h2 style="font-size:1rem; margin:0 0 0.6rem;">Raw JSON</h2>
       <pre id="raw">—</pre>
     </div>
@@ -161,6 +174,33 @@
 
   <script>
     function $(id) { return document.getElementById(id); }
+    let pollTimer = null;
+    let pollAttempts = 0;
+    const maxPollAttempts = 12;
+
+    function clearPoll() {
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+    }
+
+    function shouldPoll(status) {
+      return status === 'pending' || status === 'generating';
+    }
+
+    function schedulePoll() {
+      clearPoll();
+      if (pollAttempts >= maxPollAttempts) {
+        $('status').textContent = 'Still generating... please click Load brief again.';
+        return;
+      }
+      pollAttempts += 1;
+      pollTimer = setTimeout(() => {
+        loadBrief(false, { silent: true });
+      }, 2000);
+    }
+
     function esc(s) {
       return String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -177,17 +217,34 @@
       }
       el.innerHTML = items.map((x) => '<li>' + esc(x) + '</li>').join('');
     }
+    function qualityReasonLabel(x) {
+      const map = {
+        no_previous_attended_class: 'No previous attended class was found for this student.',
+        last_class_missing_normalized_meeting_id: 'The previous class exists but its meeting reference could not be matched cleanly.',
+        previous_class_has_no_matched_parsed_enrichment: 'The previous class was found, but no parsed lesson enrichment was available.',
+        matched_enrichment_but_parsed_response_missing: 'Lesson enrichment matched, but the parsed summary payload was missing.',
+        no_recent_practice_activity: 'No recent app practice activity was recorded since the last class.',
+        no_recent_mistake_signals: 'No recent mistake signals were available from lesson or app data.',
+      };
+      return map[x] || x;
+    }
     function render(data) {
       $('briefStatus').textContent = data.status || '—';
       $('readiness').textContent = data.readinessScore || '—';
       $('generated').textContent = data.generatedAt || '—';
       const p = data.appPracticeSinceLastClass || {};
+      const diagnostics = data.qualityDiagnostics || {};
+      const qualityReasons = Array.isArray(diagnostics.qualityImpactReasons)
+        ? diagnostics.qualityImpactReasons
+        : [];
       $('practice').textContent = `games=${p.gamesPlayed || 0}, completed=${p.completedGames || 0}, types=${p.uniqueGameTypes || 0}`;
       $('readinessNumeric').textContent = data.readinessNumeric != null ? String(data.readinessNumeric) : '—';
       $('confidence').textContent = data.confidence || '—';
       $('grammarMistakeCount').textContent = String(p.grammarMistakeCount || 0);
       $('pronMistakeCount').textContent = String(p.pronunciationMistakeCount || 0);
+      $('lastActivityAt').textContent = p.lastActivityAt || '—';
       $('briefText').textContent = data.briefText || 'Generating...';
+      $('readinessRationale').textContent = data.readinessRationale || '—';
 
       const s = data.lastSessionSummary || {};
       $('topics').textContent = (s.topics || []).join(', ') || '—';
@@ -195,6 +252,7 @@
       $('grammar').textContent = (s.grammar || []).join(', ') || '—';
       list($('mistakes'), data.mistakesSinceLastClass || []);
       list($('reco'), data.topFocusRecommendations || []);
+      list($('qualityReasons'), qualityReasons.map(qualityReasonLabel));
       list(
         $('gameTypes'),
         (p.topGameTypes || []).map((x) =>
@@ -216,22 +274,35 @@
       return data;
     }
 
-    async function loadBrief(force) {
+    async function loadBrief(force, opts = {}) {
       try {
         showErr('');
+        if (!opts.silent) {
+          pollAttempts = 0;
+          clearPoll();
+        }
         const classId = Number($('classId').value);
         if (!Number.isFinite(classId) || classId <= 0) {
           throw new Error('Enter a valid class ID');
         }
-        $('status').textContent = force ? 'Refreshing...' : 'Loading...';
+        if (!opts.silent) {
+          $('status').textContent = force ? 'Refreshing...' : 'Loading...';
+        }
         const path = force
           ? `/v1/teachers/classes/${classId}/pre-session-brief/refresh`
           : `/v1/teachers/classes/${classId}/pre-session-brief`;
         const method = force ? 'POST' : 'GET';
         const data = await callApi(method, path);
         render(data);
-        $('status').textContent = `OK · ${method}`;
+        if (shouldPoll(data.status)) {
+          $('status').textContent = `OK · ${method} · waiting for background generation (${pollAttempts + 1}/${maxPollAttempts})`;
+          schedulePoll();
+        } else {
+          clearPoll();
+          $('status').textContent = `OK · ${method}`;
+        }
       } catch (e) {
+        clearPoll();
         showErr(e.message || 'Request failed');
         $('status').textContent = '';
       }

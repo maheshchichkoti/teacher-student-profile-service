@@ -85,6 +85,10 @@ Rules:
 - Every recommendation must include evidence: source + measurable signal (count/frequency/recency/topic).
 - Avoid generic recommendations like "keep practicing" unless tied to evidence.
 - If there is no app practice, still provide useful recommendations from session history.
+- If previous-class enrichment is missing or sparse, do NOT pretend lesson content existed.
+- When data is sparse, switch to a teacher-operational fallback: diagnostic opener, confidence-building activity, and baseline speaking/vocabulary check.
+- For new or low-context students, recommendations should help the teacher start the lesson well in the first 5-10 minutes.
+- If class context indicates trial, website, or no-history patterns, mention that context when useful.
 - Do not invent facts or numbers.
 
 Data:

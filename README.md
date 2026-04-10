@@ -89,7 +89,7 @@ Task 1 now stores LLMOps metadata in `serve.student_profile_snapshots`:
 - **Mistake depth:** merged from lesson parsed-response flags and app-level wrong patterns (`game_results` by item/error type).
 - **Readiness score:** deterministic v2 using activity volume, completion quality, recency, and signal richness; returned as label (`HIGH/MEDIUM/LOW`) + numeric score.
 - **Confidence:** derived from data completeness (last class available, parsed summary available, game result depth, recent activity).
-- **Trial/demo class handling:** by default scheduler skips trial-like classes (`is_trial=1` or `demo_class_id IS NOT NULL` or `class_type='demo'`). Toggle with `PRE_SESSION_INCLUDE_TRIAL_CLASSES=1`.
+- **Trial/demo class handling:** trial/demo classes are included in Task 2 processing and scheduler candidate scan.
 
 Pre-session scheduler runs every `PRE_SESSION_SCHEDULER_INTERVAL_SEC` (default 900s), scanning classes around ~2h before start and pre-generating briefs.
 

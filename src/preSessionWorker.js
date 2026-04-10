@@ -215,18 +215,12 @@ export async function getPreSessionBriefWithAutoRefresh(classId) {
 }
 
 export async function refreshUpcomingPreSessionBriefs() {
-  const trialFilter = config.preSessionIncludeTrialClasses
-    ? ''
-    : `AND COALESCE(is_trial, 0) = 0
-       AND demo_class_id IS NULL
-       AND (class_type IS NULL OR LOWER(class_type) <> 'demo')`;
   const rows = await query(
     `SELECT id
      FROM classes
      WHERE meeting_start >= DATE_ADD(UTC_TIMESTAMP(), INTERVAL 105 MINUTE)
        AND meeting_start < DATE_ADD(UTC_TIMESTAMP(), INTERVAL 120 MINUTE)
        AND (status IS NULL OR status NOT IN ('ended', 'completed', 'cancelled'))
-       ${trialFilter}
      ORDER BY meeting_start ASC
      LIMIT 200`,
     {},

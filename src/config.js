@@ -24,7 +24,4 @@ export const config = {
   profileAnalysisWindowDays: Number(process.env.PROFILE_ANALYSIS_WINDOW_DAYS || 90),
   profileAnalysisMaxClasses: Number(process.env.PROFILE_ANALYSIS_MAX_CLASSES || 20),
   preSessionSchedulerIntervalSec: Number(process.env.PRE_SESSION_SCHEDULER_INTERVAL_SEC || 900),
-  preSessionIncludeTrialClasses:
-    process.env.PRE_SESSION_INCLUDE_TRIAL_CLASSES === '1'
-    || process.env.PRE_SESSION_INCLUDE_TRIAL_CLASSES === 'true',
 };

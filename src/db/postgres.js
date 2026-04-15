@@ -15,6 +15,9 @@ export function getPgPool() {
       password: config.postgres.password,
       database: config.postgres.database,
       max: 5,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+      keepAlive: true,
     });
   }
   return pool;

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Demo — Student snapshot</title>
+  <title>Student Snapshot</title>
   <style>
     :root {
       --bg: #0f1419;
@@ -90,11 +90,11 @@
   <div class="wrap">
     <div style="display:flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: baseline;">
       <div>
-        <h1>Student profile snapshot <span class="badge">demo</span></h1>
-        <p class="sub">Loads Task 1 snapshot JSON and shows `summaryDisplay` exactly as the main UI would render it.</p>
+        <h1>Student Profile Snapshot</h1>
+        <p class="sub">Loads Task 1 snapshot data and shows `summaryDisplay` exactly as the personalized UI would render it.</p>
       </div>
       <div class="sub" style="margin:0;">
-        <a href="/demo-home.html">Demo Home</a>
+        <a href="/demo-home.html">Home</a>
         <span style="margin:0 0.45rem;">·</span>
         <a href="/pre-session-brief-demo.html">Task 2 Brief</a>
         <span style="margin:0 0.45rem;">·</span>
@@ -131,15 +131,39 @@
         <h2 style="font-size:1rem; margin:0 0 0.75rem;">Weak words</h2>
         <div id="weakTable"></div>
       </div>
-      <div class="card">
-        <h2 style="font-size:1rem; margin:0 0 0.75rem;">Raw JSON</h2>
-        <pre id="rawJson"></pre>
-      </div>
     </div>
   </div>
 
   <script>
     const $ = (id) => document.getElementById(id);
+
+    function toTitleCase(value) {
+      return String(value || '')
+        .toLowerCase()
+        .replace(/(^|\s)\S/g, (m) => m.toUpperCase());
+    }
+
+    function labelize(key) {
+      const map = {
+        metricsStatus: 'Metrics Status',
+        summaryStatus: 'Summary Status',
+        englishLevel: 'English Level',
+        totalWordsLearned: 'Total Words Learned',
+        totalClasses: 'Total Classes',
+        learningGoal: 'Learning Goal',
+        grammarTopics: 'Grammar Topics',
+        lastAnalysisAt: 'Last Analysis At',
+        metricsUpdatedAt: 'Metrics Updated At',
+        summaryUpdatedAt: 'Summary Updated At',
+      };
+      return map[key] || key;
+    }
+
+    function formatMetricValue(key, value) {
+      if (value == null || value === '') return '—';
+      if (key === 'metricsStatus' || key === 'summaryStatus') return toTitleCase(value);
+      return String(value);
+    }
 
     function headers() {
       return { Accept: 'application/json' };
@@ -166,7 +190,7 @@
         !data.englishLevel;
       $('analysisNote').style.display = showAnalysisNote ? 'block' : 'none';
       $('analysisNote').textContent = showAnalysisNote
-        ? 'Ended classes were found, but no LLM analysis has been safely matched to those sessions yet. This usually means the recording bridge is still unmatched or the meeting ID was reused across multiple PMR sessions.'
+        ? 'Ended classes were found, but some older classes happened before AI analysis was available, so an analysis may not exist for them.'
         : '';
 
       const metrics = [
@@ -182,7 +206,7 @@
         ['summaryUpdatedAt', data.summaryUpdatedAt],
       ];
       $('metricsGrid').innerHTML = metrics.map(([k, v]) =>
-        '<div class="metric"><k>' + esc(k) + '</k><v>' + (v == null || v === '' ? '—' : esc(String(v))) + '</v></div>'
+        '<div class="metric"><k>' + esc(labelize(k)) + '</k><v>' + esc(formatMetricValue(k, v)) + '</v></div>'
       ).join('');
 
       const weak = Array.isArray(data.weakWords) ? data.weakWords : [];
@@ -196,7 +220,6 @@
           ).join('') +
           '</tbody></table>';
       }
-      $('rawJson').textContent = JSON.stringify(data, null, 2);
     }
 
     async function pollForFreshSnapshot(studentId) {
@@ -211,7 +234,7 @@
           if (!res.ok) return;
           const data = await res.json();
           render(data);
-          $('statusText').textContent = 'OK · GET';
+          $('statusText').textContent = 'Snapshot updated';
           if (
             data.metricsStatus !== 'pending' &&
             data.metricsStatus !== 'generating' &&
@@ -228,7 +251,20 @@
 
     async function loadProfile(refresh) {
       const sid = $('studentId').value.trim();
-      if (!sid) { showErr('Enter a student ID.'); return; }
+      if (!sid) {
+        showErr('Please enter a student ID.');
+        $('statusText').textContent = '';
+        $('loadBtn').disabled = false;
+        $('refreshBtn').disabled = false;
+        return;
+      }
+      if (!/^\d+$/.test(sid)) {
+        showErr('Please enter a valid numeric student ID.');
+        $('statusText').textContent = '';
+        $('loadBtn').disabled = false;
+        $('refreshBtn').disabled = false;
+        return;
+      }
       showErr('');
       $('loadBtn').disabled = $('refreshBtn').disabled = true;
       $('statusText').textContent = refresh ? 'Refreshing…' : 'Loading…';
@@ -246,12 +282,15 @@
         let data;
         try { data = JSON.parse(text); } catch (_) { data = { error: text }; }
         if (!res.ok) {
-          showErr('HTTP ' + res.status + '\\n' + (typeof data === 'object' ? JSON.stringify(data, null, 2) : text));
+          if (res.status === 400) showErr('Please enter a valid numeric student ID.');
+          else if (res.status === 404) showErr('No snapshot was found for this student.');
+          else showErr('Unable to load the student snapshot right now. Please try again.');
+          $('statusText').textContent = '';
           $('result').style.display = 'none';
           return;
         }
         render(data);
-        $('statusText').textContent = 'OK · ' + (refresh ? 'refresh' : 'GET');
+        $('statusText').textContent = refresh ? 'Snapshot refreshed' : 'Snapshot loaded';
         if (
           !refresh &&
           (
@@ -264,7 +303,8 @@
           pollForFreshSnapshot(sid);
         }
       } catch (e) {
-        showErr(String(e.message || e));
+        showErr('Unable to load the student snapshot right now. Please try again.');
+        $('statusText').textContent = '';
         $('result').style.display = 'none';
       } finally {
         $('loadBtn').disabled = $('refreshBtn').disabled = false;

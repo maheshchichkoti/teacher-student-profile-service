@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Demo — Pre-session brief</title>
+  <title>Pre-Session Brief</title>
   <style>
     :root {
       --bg: #0f1419;
@@ -88,11 +88,11 @@
   <div class="wrap">
     <div style="display:flex; justify-content: space-between; gap:1rem; flex-wrap: wrap; align-items: baseline;">
       <div>
-        <h1>Pre-session brief <span class="badge">demo</span></h1>
-        <p class="sub">Task 2 standalone demo using <code>/v1/teachers/classes/:classId/pre-session-brief</code>.</p>
+        <h1>Pre-Session Brief</h1>
+        <p class="sub">Task 2 standalone brief using <code>/v1/teachers/classes/:classId/pre-session-brief</code>.</p>
       </div>
       <div class="sub" style="margin:0;">
-        <a href="/demo-home.html">Demo Home</a>
+        <a href="/demo-home.html">Home</a>
         <span style="margin:0 0.45rem;">·</span>
         <a href="/my-students-demo.html">Task 1 Student List</a>
       </div>
@@ -165,11 +165,6 @@
       <h2 style="font-size:1rem; margin:0 0 0.6rem;">Data limitations</h2>
       <ul id="qualityReasons"><li class="sub">—</li></ul>
     </div>
-
-    <div class="card">
-      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Raw JSON</h2>
-      <pre id="raw">—</pre>
-    </div>
   </div>
 
   <script>
@@ -192,7 +187,7 @@
     function schedulePoll() {
       clearPoll();
       if (pollAttempts >= maxPollAttempts) {
-        $('status').textContent = 'Still generating... please click Load brief again.';
+        $('status').textContent = 'Still preparing the brief. Please click Load brief again.';
         return;
       }
       pollAttempts += 1;
@@ -259,7 +254,6 @@
           `${x.gameType}: sessions=${x.sessions}, completed=${x.completed}, accuracy=${Math.round(Number(x.accuracy || 0))}%`,
         ),
       );
-      $('raw').textContent = JSON.stringify(data, null, 2);
     }
 
     async function callApi(method, url) {
@@ -268,8 +262,9 @@
       let data = {};
       try { data = text ? JSON.parse(text) : {}; } catch {}
       if (!res.ok) {
-        const msg = (data && data.error) ? data.error : text || `HTTP ${res.status}`;
-        throw new Error(msg);
+        if (res.status === 400) throw new Error('Please enter a valid class ID.');
+        if (res.status === 404) throw new Error('No brief was found for this class.');
+        throw new Error('Unable to load the brief right now. Please try again.');
       }
       return data;
     }
@@ -283,7 +278,7 @@
         }
         const classId = Number($('classId').value);
         if (!Number.isFinite(classId) || classId <= 0) {
-          throw new Error('Enter a valid class ID');
+          throw new Error('Please enter a valid class ID.');
         }
         if (!opts.silent) {
           $('status').textContent = force ? 'Refreshing...' : 'Loading...';
@@ -295,15 +290,15 @@
         const data = await callApi(method, path);
         render(data);
         if (shouldPoll(data.status)) {
-          $('status').textContent = `OK · ${method} · waiting for background generation (${pollAttempts + 1}/${maxPollAttempts})`;
+          $('status').textContent = 'Preparing the latest brief...';
           schedulePoll();
         } else {
           clearPoll();
-          $('status').textContent = `OK · ${method}`;
+          $('status').textContent = force ? 'Brief refreshed' : 'Brief loaded';
         }
       } catch (e) {
         clearPoll();
-        showErr(e.message || 'Request failed');
+        showErr(e.message || 'Unable to load the brief right now. Please try again.');
         $('status').textContent = '';
       }
     }

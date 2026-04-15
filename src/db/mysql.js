@@ -13,6 +13,12 @@ export function getPool() {
       database: config.mysql.database,
       waitForConnections: true,
       connectionLimit: 10,
+      maxIdle: 10,
+      idleTimeout: 60000,
+      queueLimit: 0,
+      connectTimeout: 10000,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 0,
       namedPlaceholders: true,
     });
   }

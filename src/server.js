@@ -27,9 +27,12 @@ app.use(myStudentsDemoRouter);
 app.use(profileRouter);
 app.use(preSessionBriefRouter);
 
-app.listen(config.port, () => {
+const server = app.listen(config.port, () => {
   console.error(`teacher-student-profile-service listening on :${config.port}`);
 });
+
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
 
 if (config.preSessionSchedulerIntervalSec > 0) {
   const ms = config.preSessionSchedulerIntervalSec * 1000;

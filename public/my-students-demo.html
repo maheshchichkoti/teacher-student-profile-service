@@ -105,7 +105,6 @@
       <div class="muted" style="font-size:0.9rem; display:flex; gap:0.7rem; align-items:center; flex-wrap:wrap;">
         <a class="link" href="/demo-home.html">Home</a>
         <a class="link" href="/pre-session-brief-demo.html">Task 2 Brief</a>
-        <span>API: <code>/demo/my-students</code></span>
       </div>
     </div>
 
@@ -253,19 +252,6 @@
       const sortBy = $('sortBy').value;
       const sortOrder = 'desc';
 
-      if (!search && !opts.allowBlank) {
-        $('tbody').innerHTML = '<tr><td colspan="6" class="muted">No students found.</td></tr>';
-        $('statusText').textContent = '';
-        $('statTotal').textContent = '—';
-        $('statActive').textContent = '—';
-        $('statPage').textContent = '—';
-        showErr('Please enter a name or email to search.');
-        $('prevBtn').disabled = true;
-        $('nextBtn').disabled = true;
-        $('firstBtn').disabled = true;
-        $('lastBtn').disabled = true;
-        return;
-      }
       if (/^\d+$/.test(search)) {
         $('tbody').innerHTML = '<tr><td colspan="6" class="muted">No students found.</td></tr>';
         $('statusText').textContent = '';
@@ -336,24 +322,17 @@
       }
     }
 
-    $('loadBtn').addEventListener('click', () => { page = 1; load(); });
+    $('loadBtn').addEventListener('click', () => { page = 1; load({ allowBlank: true }); });
     $('clearSearchBtn').addEventListener('click', () => {
       $('search').value = '';
       showErr('');
-      $('tbody').innerHTML = '<tr><td colspan="6" class="muted">Search by student name or email, or click Load to view all students.</td></tr>';
-      $('statusText').textContent = '';
-      $('statTotal').textContent = '—';
-      $('statActive').textContent = '—';
-      $('statPage').textContent = '—';
-      $('prevBtn').disabled = true;
-      $('nextBtn').disabled = true;
-      $('firstBtn').disabled = true;
-      $('lastBtn').disabled = true;
+      page = 1;
+      load({ allowBlank: true });
     });
-    $('firstBtn').addEventListener('click', () => { page = 1; load(); });
-    $('prevBtn').addEventListener('click', () => { if (page > 1) { page -= 1; load(); } });
-    $('nextBtn').addEventListener('click', () => { page += 1; load(); });
-    $('lastBtn').addEventListener('click', () => { page = lastKnownTotalPages; load(); });
+    $('firstBtn').addEventListener('click', () => { page = 1; load({ allowBlank: true }); });
+    $('prevBtn').addEventListener('click', () => { if (page > 1) { page -= 1; load({ allowBlank: true }); } });
+    $('nextBtn').addEventListener('click', () => { page += 1; load({ allowBlank: true }); });
+    $('lastBtn').addEventListener('click', () => { page = lastKnownTotalPages; load({ allowBlank: true }); });
     $('goPageBtn').addEventListener('click', () => {
       const nextPage = Number($('pageInput').value);
       if (!Number.isFinite(nextPage) || nextPage < 1) {
@@ -375,11 +354,7 @@
         $('statusText').textContent = '';
         return;
       }
-      if (init.search) {
-        load();
-      } else {
-        load({ allowBlank: true });
-      }
+      load({ allowBlank: true });
     })();
   </script>
 </body>

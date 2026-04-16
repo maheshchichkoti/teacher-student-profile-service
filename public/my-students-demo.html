@@ -218,16 +218,24 @@
         return;
       }
       tb.innerHTML = students.map((s) => {
-        const safeId = s.id != null ? String(s.id) : '—';
-        const name = esc((s.name && String(s.name).trim()) || `Student ${safeId}`);
+        const rawId = normalizeDisplayValue(s.id);
+        const safeId = rawId || '—';
+        const rawName = sanitizeStudentName(s.name, rawId);
+        const name = esc(rawName || '—');
         const level = esc(s.level || '—');
         const total = esc(String(s.totalClasses ?? 0));
         const hours = esc(String(s.learningHours?.total ?? 0));
         const last = s.lastClassDays != null
           ? formatLastClassAge(s.lastClassDays)
           : 'No classes yet';
-        const link = '/student-profile-demo.html?studentId=' + encodeURIComponent(safeId);
-        const avatar = s.avatar ? '<img class="avatar" src="' + esc(s.avatar) + '" alt="' + name + '">' : '<div class="avatar"></div>';
+        const link = rawId ? ('/student-profile-demo.html?studentId=' + encodeURIComponent(rawId)) : '';
+        const avatarUrl = normalizeDisplayValue(s.avatar);
+        const avatar = avatarUrl
+          ? '<img class="avatar" src="' + esc(avatarUrl) + '" alt="' + name + '" onerror="this.outerHTML=\'<div class=&quot;avatar&quot;></div>\'">'
+          : '<div class="avatar"></div>';
+        const action = rawId
+          ? '<a class="link" href="' + link + '">View snapshot</a>'
+          : '<span class="muted">—</span>';
         return (
           '<tr>' +
             '<td><div class="student-cell">' + avatar + '<div><div style="font-weight:600;">' + name + '</div><div class="muted" style="font-size:0.85rem;">ID ' + esc(safeId) + '</div></div></div></td>' +
@@ -235,10 +243,30 @@
             '<td>' + total + '</td>' +
             '<td>' + hours + '</td>' +
             '<td>' + esc(last) + '</td>' +
-            '<td><a class="link" href="' + link + '">View snapshot</a></td>' +
+            '<td>' + action + '</td>' +
           '</tr>'
         );
       }).join('');
+    }
+
+    function sanitizeStudentName(value, normalizedId) {
+      const text = normalizeDisplayValue(value);
+      if (!text) {
+        return normalizedId ? `Student ${normalizedId}` : '';
+      }
+      if (/^student\s+(null|undefined|nan|—)$/i.test(text)) {
+        return normalizedId ? `Student ${normalizedId}` : '';
+      }
+      return text;
+    }
+
+    function normalizeDisplayValue(value) {
+      if (value == null) return '';
+      const text = String(value).trim();
+      if (!text) return '';
+      const lowered = text.toLowerCase();
+      if (lowered === 'null' || lowered === 'undefined' || lowered === 'nan') return '';
+      return text;
     }
 
     function formatLastClassAge(daysValue) {

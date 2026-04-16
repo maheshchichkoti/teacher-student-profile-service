@@ -224,7 +224,7 @@
         const total = esc(String(s.totalClasses ?? 0));
         const hours = esc(String(s.learningHours?.total ?? 0));
         const last = s.lastClassDays != null
-          ? (Number(s.lastClassDays) === 0 ? 'Today' : `${esc(String(s.lastClassDays))} days ago`)
+          ? formatLastClassAge(s.lastClassDays)
           : 'No classes yet';
         const link = '/student-profile-demo.html?studentId=' + encodeURIComponent(safeId);
         const avatar = s.avatar ? '<img class="avatar" src="' + esc(s.avatar) + '" alt="' + name + '">' : '<div class="avatar"></div>';
@@ -239,6 +239,25 @@
           '</tr>'
         );
       }).join('');
+    }
+
+    function formatLastClassAge(daysValue) {
+      const days = Number(daysValue);
+      if (!Number.isFinite(days) || days < 0) return 'No classes yet';
+      if (days === 0) return 'Today';
+      if (days <= 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+
+      const totalMonths = Math.floor(days / 30);
+      if (days <= 365) {
+        return `${totalMonths} month${totalMonths === 1 ? '' : 's'} ago`;
+      }
+
+      const years = Math.floor(totalMonths / 12);
+      const months = totalMonths % 12;
+      if (months === 0) {
+        return `${years} year${years === 1 ? '' : 's'} ago`;
+      }
+      return `${years} year${years === 1 ? '' : 's'} ${months} month${months === 1 ? '' : 's'} ago`;
     }
 
     function esc(s) {

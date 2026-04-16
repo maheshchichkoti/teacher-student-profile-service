@@ -90,6 +90,7 @@ myStudentsDemoRouter.get('/demo/my-students', async (req, res) => {
 
     // Active students heuristic (same idea as snapshot totalClasses): ended + present.
     where.push(`c.status = 'ended' AND c.is_present = 1`);
+    where.push(`c.student_id IS NOT NULL`);
 
     // If status is requested, we can only approximate. Keep "active" as default (no-op).
     if (status && status !== 'active') {

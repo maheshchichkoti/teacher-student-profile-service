@@ -67,6 +67,13 @@
     .metric { padding: 0.75rem; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
     .metric k { display: block; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
     .metric v { font-size: 1rem; margin-top: 0.25rem; word-break: break-word; }
+    .metric-list {
+      margin: 0.4rem 0 0;
+      padding-left: 1rem;
+      display: grid;
+      gap: 0.45rem;
+    }
+    .metric-list li { line-height: 1.5; }
     .summary { font-size: 1rem; line-height: 1.6; }
     .note {
       margin-top: 0.75rem;
@@ -91,12 +98,10 @@
     <div style="display:flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: baseline;">
       <div>
         <h1>Student Profile Snapshot</h1>
-        <p class="sub">Loads Task 1 snapshot data and shows `summaryDisplay` exactly as the personalized UI would render it.</p>
+        <p class="sub">Review the student summary, learning highlights, and focus areas in one view.</p>
       </div>
       <div class="sub" style="margin:0;">
         <a href="/demo-home.html">Home</a>
-        <span style="margin:0 0.45rem;">·</span>
-        <a href="/pre-session-brief-demo.html">Task 2 Brief</a>
         <span style="margin:0 0.45rem;">·</span>
         <a id="backLink" href="/my-students-demo.html">← Back to student list</a>
       </div>
@@ -111,7 +116,7 @@
       </div>
       <div class="actions">
         <button type="button" id="loadBtn">Load snapshot</button>
-        <button type="button" id="refreshBtn" class="secondary">Refresh (sync)</button>
+        <button type="button" id="refreshBtn" class="secondary">Refresh snapshot</button>
       </div>
       <p id="statusText" class="sub" style="margin: 1rem 0 0;"></p>
       <p id="errorText" class="err" style="display:none;"></p>
@@ -119,7 +124,7 @@
 
     <div id="result" style="display:none;">
       <div class="card">
-        <h2 style="font-size:1rem; margin:0 0 0.75rem;">Summary for UI (`summaryDisplay`)</h2>
+        <h2 style="font-size:1rem; margin:0 0 0.75rem;">Summary</h2>
         <p id="summaryDisplay" class="summary"></p>
         <div id="analysisNote" class="note" style="display:none;"></div>
       </div>
@@ -145,24 +150,49 @@
 
     function labelize(key) {
       const map = {
-        metricsStatus: 'Metrics Status',
-        summaryStatus: 'Summary Status',
         englishLevel: 'English Level',
         totalWordsLearned: 'Total Words Learned',
         totalClasses: 'Total Classes',
         learningGoal: 'Learning Goal',
         grammarTopics: 'Grammar Topics',
-        lastAnalysisAt: 'Last Analysis At',
-        metricsUpdatedAt: 'Metrics Updated At',
-        summaryUpdatedAt: 'Summary Updated At',
+        lastAnalysisAt: 'Last Analysis',
+        metricsUpdatedAt: 'Metrics Updated',
+        summaryUpdatedAt: 'Summary Updated',
       };
       return map[key] || key;
     }
 
     function formatMetricValue(key, value) {
       if (value == null || value === '') return '—';
-      if (key === 'metricsStatus' || key === 'summaryStatus') return toTitleCase(value);
+      if (key === 'lastAnalysisAt' || key === 'metricsUpdatedAt' || key === 'summaryUpdatedAt') {
+        return formatDateTimeLocal(value);
+      }
       return String(value);
+    }
+
+    function formatDateTimeLocal(value) {
+      const date = new Date(value);
+      if (!Number.isFinite(date.getTime())) return '—';
+      return new Intl.DateTimeFormat(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZoneName: 'short',
+      }).format(date);
+    }
+
+    function formatSummaryText(value) {
+      const text = String(value || '').trim();
+      if (!text) return '—';
+      const normalized = text
+        .replace(/^Here's an update on\s+/i, '')
+        .replace(/\bour\s+(.+?)\s+student\b/i, 'this student')
+        .replace(/^this student,\s*who has now completed\s+/i, 'This student has completed ')
+        .replace(/^this student\b/i, 'This student');
+      return normalized;
     }
 
     function headers() {
@@ -181,7 +211,7 @@
 
     function render(data) {
       $('result').style.display = 'block';
-      $('summaryDisplay').textContent = data.summaryDisplay || data.aiSummary || '—';
+      $('summaryDisplay').textContent = formatSummaryText(data.summaryDisplay || data.aiSummary || '');
 
       const showAnalysisNote =
         Number(data.totalClasses || 0) > 0 &&
@@ -194,19 +224,17 @@
         : '';
 
       const metrics = [
-        ['metricsStatus', data.metricsStatus],
-        ['summaryStatus', data.summaryStatus],
         ['englishLevel', data.englishLevel],
         ['totalWordsLearned', data.totalWordsLearned],
         ['totalClasses', data.totalClasses],
         ['learningGoal', data.learningGoal],
-        ['grammarTopics', Array.isArray(data.grammarTopics) ? data.grammarTopics.join(', ') : data.grammarTopics],
+        ['grammarTopics', Array.isArray(data.grammarTopics) ? data.grammarTopics : data.grammarTopics],
         ['lastAnalysisAt', data.lastAnalysisAt],
         ['metricsUpdatedAt', data.metricsUpdatedAt],
         ['summaryUpdatedAt', data.summaryUpdatedAt],
       ];
       $('metricsGrid').innerHTML = metrics.map(([k, v]) =>
-        '<div class="metric"><k>' + esc(labelize(k)) + '</k><v>' + esc(formatMetricValue(k, v)) + '</v></div>'
+        '<div class="metric"><k>' + esc(labelize(k)) + '</k>' + renderMetricContent(k, v) + '</div>'
       ).join('');
 
       const weak = Array.isArray(data.weakWords) ? data.weakWords : [];
@@ -216,10 +244,23 @@
         $('weakTable').innerHTML =
           '<table><thead><tr><th>Word</th><th>Count</th><th>Issue</th></tr></thead><tbody>' +
           weak.map((w) =>
-            '<tr><td>' + esc(w.word ?? '') + '</td><td>' + esc(w.count ?? '') + '</td><td>' + esc(w.issue ?? '—') + '</td></tr>'
+            '<tr><td>' + esc(toTitleCase(w.word ?? '')) + '</td><td>' + esc(w.count ?? '') + '</td><td>' + esc(toTitleCase(w.issue ?? '—')) + '</td></tr>'
           ).join('') +
           '</tbody></table>';
       }
+    }
+
+    function renderMetricContent(key, value) {
+      if (key === 'grammarTopics') {
+        const topics = Array.isArray(value)
+          ? value.filter((item) => String(item || '').trim())
+          : [];
+        if (topics.length === 0) {
+          return '<v>—</v>';
+        }
+        return '<ul class="metric-list">' + topics.map((topic) => '<li>' + esc(String(topic)) + '</li>').join('') + '</ul>';
+      }
+      return '<v>' + esc(formatMetricValue(key, value)) + '</v>';
     }
 
     async function pollForFreshSnapshot(studentId) {
@@ -234,15 +275,16 @@
           if (!res.ok) return;
           const data = await res.json();
           render(data);
-          $('statusText').textContent = 'Snapshot updated';
           if (
             data.metricsStatus !== 'pending' &&
             data.metricsStatus !== 'generating' &&
             data.summaryStatus !== 'pending' &&
             data.summaryStatus !== 'generating'
           ) {
+            $('statusText').textContent = '';
             return;
           }
+          $('statusText').textContent = 'Preparing the latest snapshot…';
         } catch (_) {
           return;
         }
@@ -290,9 +332,7 @@
           return;
         }
         render(data);
-        $('statusText').textContent = refresh ? 'Snapshot refreshed' : 'Snapshot loaded';
         if (
-          !refresh &&
           (
             data.metricsStatus === 'pending' ||
             data.metricsStatus === 'generating' ||
@@ -300,7 +340,10 @@
             data.summaryStatus === 'generating'
           )
         ) {
+          $('statusText').textContent = 'Preparing the latest snapshot…';
           pollForFreshSnapshot(sid);
+        } else {
+          $('statusText').textContent = '';
         }
       } catch (e) {
         showErr('Unable to load the student snapshot right now. Please try again.');

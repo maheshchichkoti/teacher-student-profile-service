@@ -81,6 +81,46 @@
     .pill { display:inline-block; padding:0.15rem 0.5rem; border:1px solid var(--border); border-radius: 999px; font-size:0.75rem; color: var(--muted); }
     .topbar { display:flex; gap:0.75rem; justify-content: space-between; align-items: center; flex-wrap: wrap; }
     .pager { display:flex; gap:0.5rem; align-items:center; }
+    .table-toolbar { display:flex; justify-content: space-between; align-items:center; gap:0.75rem; flex-wrap: wrap; margin-top: 1rem; }
+    .table-toolbar .actions { gap: 0.5rem; }
+    .pagination-bar { display:flex; justify-content: space-between; align-items:center; gap:0.75rem; flex-wrap: wrap; margin-top: 1rem; }
+    .page-numbers { display:flex; gap:0.4rem; flex-wrap: wrap; align-items: center; }
+    .sort-button {
+      appearance: none;
+      background: transparent;
+      border: none;
+      color: inherit;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font: inherit;
+      cursor: pointer;
+    }
+    .sort-button:hover { color: var(--text); }
+    .sort-icon { color: var(--muted); font-size: 0.8rem; }
+    .sort-button.active .sort-icon { color: var(--accent); }
+    .page-chip {
+      min-width: 2.25rem;
+      height: 2.25rem;
+      padding: 0 0.7rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .page-chip.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      cursor: default;
+    }
+    .page-chip:disabled { opacity: 0.5; cursor: not-allowed; }
     .link { color: var(--accent); text-decoration: none; }
     .link:hover { text-decoration: underline; }
     .avatar {
@@ -100,11 +140,10 @@
     <div class="topbar">
       <div>
         <h1>My Students</h1>
-        <p class="sub">Student list for Task 1 (from MySQL <code>classes</code> + <code>users</code>). No teacher ID needed.</p>
+        <p class="sub">View students, class history, and snapshot access in one place.</p>
       </div>
       <div class="muted" style="font-size:0.9rem; display:flex; gap:0.7rem; align-items:center; flex-wrap:wrap;">
         <a class="link" href="/demo-home.html">Home</a>
-        <a class="link" href="/pre-session-brief-demo.html">Task 2 Brief</a>
       </div>
     </div>
 
@@ -129,28 +168,9 @@
           <label for="search">Search</label>
           <input id="search" type="text" placeholder="name / email" autocomplete="off" />
         </div>
-        <div>
-          <label for="sortBy">Sort by</label>
-          <select id="sortBy">
-            <option value="name">Name</option>
-            <option value="level">Level</option>
-            <option value="totalClasses">Total Classes</option>
-            <option value="learningHours">Learning Hours</option>
-            <option value="lastClass">Last Class</option>
-          </select>
-        </div>
         <div class="actions">
           <button type="button" id="loadBtn">Load</button>
           <button type="button" id="clearSearchBtn" class="secondary">Clear</button>
-          <button type="button" id="firstBtn" class="secondary">First</button>
-          <button type="button" id="prevBtn" class="secondary">Prev</button>
-          <button type="button" id="nextBtn" class="secondary">Next</button>
-          <button type="button" id="lastBtn" class="secondary">Last</button>
-        </div>
-        <div class="actions">
-          <label for="pageInput" style="margin-bottom:0;">Go to page</label>
-          <input id="pageInput" type="number" min="1" placeholder="Page" style="max-width:110px;" />
-          <button type="button" id="goPageBtn" class="secondary">Go</button>
         </div>
       </div>
       <p id="statusText" class="sub" style="margin: 1rem 0 0;"></p>
@@ -162,11 +182,11 @@
         <table>
           <thead>
             <tr>
-              <th style="min-width: 220px;">Student</th>
-              <th>Level</th>
-              <th>Total Classes</th>
-              <th>Learning Hours</th>
-              <th>Last Class</th>
+              <th style="min-width: 220px;"><button type="button" class="sort-button" data-sort="name">Student <span class="sort-icon">↕</span></button></th>
+              <th><button type="button" class="sort-button" data-sort="level">Level <span class="sort-icon">↕</span></button></th>
+              <th><button type="button" class="sort-button" data-sort="totalClasses">Total Classes <span class="sort-icon">↕</span></button></th>
+              <th><button type="button" class="sort-button" data-sort="learningHours">Learning Hours <span class="sort-icon">↕</span></button></th>
+              <th><button type="button" class="sort-button" data-sort="lastClass">Last Class <span class="sort-icon">↕</span></button></th>
               <th style="min-width: 160px;">Action</th>
             </tr>
           </thead>
@@ -175,14 +195,42 @@
           </tbody>
         </table>
       </div>
+      <div class="pagination-bar">
+        <div class="actions">
+          <button type="button" id="firstBtn" class="secondary" aria-label="First page">«</button>
+          <button type="button" id="prevBtn" class="secondary" aria-label="Previous page">‹</button>
+          <div id="pageNumbers" class="page-numbers"></div>
+          <button type="button" id="nextBtn" class="secondary" aria-label="Next page">›</button>
+          <button type="button" id="lastBtn" class="secondary" aria-label="Last page">»</button>
+        </div>
+        <div class="actions">
+          <div>
+            <label for="pageSize" style="margin-bottom:0.2rem;">Rows</label>
+            <select id="pageSize" style="width:auto; min-width:88px;">
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+            </select>
+          </div>
+          <div>
+            <label for="pageInput" style="margin-bottom:0.2rem;">Go to page</label>
+            <div class="actions">
+              <input id="pageInput" type="number" min="1" placeholder="Page" style="max-width:110px;" />
+              <button type="button" id="goPageBtn" class="secondary">Go</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
     const $ = (id) => document.getElementById(id);
     let page = 1;
-    const limit = 10;
+    let limit = 10;
     let lastKnownTotalPages = 1;
+    let currentSortBy = 'name';
+    let currentSortOrder = 'desc';
 
     function showErr(msg) {
       const el = $('errorText');
@@ -208,6 +256,48 @@
       }
       const s = p.toString();
       history.replaceState(null, '', s ? ('?' + s) : '');
+    }
+
+    function updateSortButtons() {
+      document.querySelectorAll('.sort-button[data-sort]').forEach((button) => {
+        const sortKey = button.getAttribute('data-sort');
+        const icon = button.querySelector('.sort-icon');
+        const isActive = sortKey === currentSortBy;
+        button.classList.toggle('active', isActive);
+        if (icon) {
+          icon.textContent = isActive ? (currentSortOrder === 'asc' ? '↑' : '↓') : '↕';
+        }
+      });
+    }
+
+    function renderPageNumbers(currentPage, totalPages) {
+      const el = $('pageNumbers');
+      if (totalPages <= 1) {
+        el.innerHTML = '';
+        return;
+      }
+      const pages = new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1]);
+      const ordered = [...pages].filter((p) => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+      const chunks = [];
+      for (let i = 0; i < ordered.length; i += 1) {
+        const value = ordered[i];
+        const previous = ordered[i - 1];
+        if (i > 0 && value - previous > 1) {
+          chunks.push('<span class="muted">…</span>');
+        }
+        chunks.push(
+          value === currentPage
+            ? '<button type="button" class="page-chip active" disabled>' + value + '</button>'
+            : '<button type="button" class="page-chip" data-page="' + value + '">' + value + '</button>'
+        );
+      }
+      el.innerHTML = chunks.join('');
+      el.querySelectorAll('[data-page]').forEach((button) => {
+        button.addEventListener('click', () => {
+          page = Number(button.getAttribute('data-page'));
+          load({ allowBlank: true });
+        });
+      });
     }
 
     function renderRows(data) {
@@ -296,8 +386,8 @@
       showErr('');
 
       const search = $('search').value.trim();
-      const sortBy = $('sortBy').value;
-      const sortOrder = 'desc';
+      const sortBy = currentSortBy;
+      const sortOrder = currentSortOrder;
 
       if (/^\d+$/.test(search)) {
         $('tbody').innerHTML = '<tr><td colspan="6" class="muted">No students found.</td></tr>';
@@ -310,6 +400,7 @@
         $('nextBtn').disabled = true;
         $('firstBtn').disabled = true;
         $('lastBtn').disabled = true;
+        $('pageNumbers').innerHTML = '';
         return;
       }
 
@@ -345,23 +436,28 @@
         const metrics = data.metrics || {};
         const totalStudents = Number(pg.totalStudents || 0);
         lastKnownTotalPages = Number(pg.totalPages || 1);
+        updateSortButtons();
         $('statusText').textContent = totalStudents > 0
-          ? ('Page ' + (pg.currentPage || page) + ' of ' + (pg.totalPages || 1) + ' · Total students: ' + totalStudents)
+          ? ('Showing page ' + (pg.currentPage || page) + ' of ' + (pg.totalPages || 1) + ' · ' + totalStudents + ' students')
           : '';
         $('statTotal').textContent = String(pg.totalStudents ?? metrics.totalStudents ?? '—');
         $('statActive').textContent = String(metrics.activeStudents ?? '—');
         $('statPage').textContent = totalStudents > 0 ? String((pg.currentPage || page) + ' / ' + (pg.totalPages || 1)) : '—';
 
         const totalPages = Number(pg.totalPages || 1);
+        page = Number(pg.currentPage || page);
         $('prevBtn').disabled = page <= 1;
         $('nextBtn').disabled = page >= totalPages;
         $('firstBtn').disabled = page <= 1;
         $('lastBtn').disabled = page >= totalPages;
         $('goPageBtn').disabled = totalPages <= 1;
         $('pageInput').value = String(pg.currentPage || page);
+        $('pageSize').value = String(limit);
+        renderPageNumbers(page, totalPages);
       } catch (e) {
         showErr('Unable to load the student list right now. Please try again.');
         $('statusText').textContent = '';
+        $('pageNumbers').innerHTML = '';
       } finally {
         $('loadBtn').disabled = false;
         $('clearSearchBtn').disabled = false;
@@ -389,18 +485,39 @@
       page = Math.min(Math.max(1, Math.floor(nextPage)), lastKnownTotalPages || 1);
       load({ allowBlank: true });
     });
+    $('pageSize').addEventListener('change', () => {
+      limit = Number($('pageSize').value) || 10;
+      page = 1;
+      load({ allowBlank: true });
+    });
+    document.querySelectorAll('.sort-button[data-sort]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const nextSortBy = button.getAttribute('data-sort') || 'name';
+        if (currentSortBy === nextSortBy) {
+          currentSortOrder = currentSortOrder === 'desc' ? 'asc' : 'desc';
+        } else {
+          currentSortBy = nextSortBy;
+          currentSortOrder = 'desc';
+        }
+        page = 1;
+        updateSortButtons();
+        load({ allowBlank: true });
+      });
+    });
 
     // Init from query string for shareable demo links.
     (function init() {
       const init = qs();
       if (init.search) $('search').value = init.search;
-      if (init.sortBy) $('sortBy').value = init.sortBy;
+      if (init.sortBy) currentSortBy = init.sortBy;
+      if (init.sortOrder) currentSortOrder = init.sortOrder;
       if (init.page) page = init.page;
       if (window.location.protocol === 'file:') {
         showErr('Open this page via the running server, not as a local file.\nUse: http://localhost:3840/');
         $('statusText').textContent = '';
         return;
       }
+      updateSortButtons();
       load({ allowBlank: true });
     })();
   </script>

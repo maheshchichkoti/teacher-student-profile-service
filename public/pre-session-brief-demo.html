@@ -24,15 +24,15 @@
       line-height: 1.5;
       min-height: 100vh;
     }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
-    h1 { font-size: 1.35rem; font-weight: 600; margin: 0 0 0.35rem; }
-    .sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; }
+    .wrap { max-width: 1000px; margin: 0 auto; padding: 1.3rem; }
+    h1 { font-size: 1.28rem; font-weight: 600; margin: 0 0 0.3rem; letter-spacing: 0.01em; }
+    .sub { color: var(--muted); font-size: 0.86rem; margin: 0 0 0.9rem; }
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 1rem 1.25rem;
-      margin-bottom: 1rem;
+      padding: 0.9rem 1.05rem;
+      margin-bottom: 0.8rem;
     }
     label { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.35rem; }
     input {
@@ -45,7 +45,7 @@
       font-size: 0.95rem;
     }
     input:focus { outline: 2px solid var(--accent); border-color: transparent; }
-    .row { display: grid; gap: 1rem; margin-bottom: 0.7rem; }
+    .row { display: grid; gap: 0.75rem; margin-bottom: 0.55rem; }
     @media (min-width: 560px) { .row { grid-template-columns: 1fr auto auto; align-items: end; } }
     button {
       padding: 0.6rem 1.1rem;
@@ -63,11 +63,11 @@
     .err { color: var(--danger); font-size: 0.9rem; white-space: pre-wrap; }
     .grid { display: grid; gap: 0.75rem; }
     @media (min-width: 760px) { .grid.cols-4 { grid-template-columns: repeat(4, 1fr); } }
-    .metric { padding: 0.75rem; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
+    .metric { padding: 0.62rem; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
     .metric k { display:block; font-size:0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
-    .metric v { font-size: 1rem; margin-top: 0.2rem; display:block; word-break: break-word; }
+    .metric v { font-size: 0.94rem; margin-top: 0.15rem; display:block; word-break: break-word; }
     ul { margin: 0.4rem 0 0 1.2rem; padding: 0; }
-    li { margin-bottom: 0.3rem; }
+    li { margin-bottom: 0.3rem; word-break: break-word; overflow-wrap: anywhere; }
     pre {
       margin: 0;
       font-size: 0.75rem;
@@ -82,6 +82,49 @@
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
     .badge { display: inline-block; font-size: 0.7rem; padding: 0.2rem 0.45rem; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+    .token-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.4rem;
+      margin-top: 0.45rem;
+    }
+    .token-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-top: 0.45rem;
+    }
+    .token {
+      display: inline-block;
+      padding: 0.34rem 0.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(15, 20, 25, 0.7);
+      font-size: 0.8rem;
+      line-height: 1.25;
+      color: var(--text);
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+    .token.muted {
+      color: var(--muted);
+      border-style: dashed;
+    }
+    .token-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin-bottom: 0.15rem;
+    }
+    .token-count {
+      font-size: 0.72rem;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.14rem 0.4rem;
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -107,15 +150,13 @@
         <button id="loadBtn">Load brief</button>
         <button id="refreshBtn" class="secondary">Refresh (sync)</button>
       </div>
-      <p id="status" class="sub" style="margin:0.4rem 0 0;"></p>
       <p id="errorText" class="err" style="display:none; margin:0;"></p>
     </div>
 
     <div class="card">
       <div class="grid cols-4">
-        <div class="metric"><k>Status</k><v id="briefStatus">—</v></div>
         <div class="metric"><k>Readiness</k><v id="readiness">—</v></div>
-        <div class="metric"><k>Generated</k><v id="generated">—</v></div>
+        <div class="metric"><k>Last Updated</k><v id="generated">—</v></div>
         <div class="metric"><k>Practice</k><v id="practice">—</v></div>
       </div>
       <div class="grid cols-4" style="margin-top:0.65rem;">
@@ -130,45 +171,72 @@
     </div>
 
     <div class="card">
-      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Brief text</h2>
-      <div id="briefText" class="sub" style="margin:0;">—</div>
+      <h2 style="font-size:0.98rem; margin:0 0 0.55rem;">Brief text</h2>
+      <div id="briefText" class="sub" style="margin:0; word-break:break-word; overflow-wrap:anywhere;">—</div>
     </div>
 
     <div class="card">
-      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Readiness explanation</h2>
-      <div id="readinessRationale" class="sub" style="margin:0;">—</div>
+      <h2 style="font-size:0.98rem; margin:0 0 0.55rem;">Readiness explanation</h2>
+      <div id="readinessRationale" class="sub" style="margin:0; word-break:break-word; overflow-wrap:anywhere;">—</div>
     </div>
 
     <div class="card">
-      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Last session summary</h2>
-      <div class="metric" style="margin-bottom:0.5rem;"><k>Topics</k><v id="topics">—</v></div>
-      <div class="metric" style="margin-bottom:0.5rem;"><k>Vocabulary</k><v id="vocab">—</v></div>
-      <div class="metric"><k>Grammar</k><v id="grammar">—</v></div>
+      <h2 style="font-size:0.98rem; margin:0 0 0.55rem;">Last session summary</h2>
+      <div class="metric" style="margin-bottom:0.5rem;">
+        <div class="token-header">
+          <k>Topics</k>
+          <span id="topicsCount" class="token-count">0</span>
+        </div>
+        <div id="topics" class="token-list"></div>
+      </div>
+      <div class="metric" style="margin-bottom:0.5rem;">
+        <div class="token-header">
+          <k>Vocabulary</k>
+          <span id="vocabCount" class="token-count">0</span>
+        </div>
+        <div id="vocab" class="token-grid"></div>
+      </div>
+      <div class="metric">
+        <div class="token-header">
+          <k>Grammar</k>
+          <span id="grammarCount" class="token-count">0</span>
+        </div>
+        <div id="grammar" class="token-grid"></div>
+      </div>
     </div>
 
     <div class="card">
-      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Practice detail (since last class)</h2>
+      <h2 style="font-size:0.98rem; margin:0 0 0.55rem;">Practice detail (since last class)</h2>
       <ul id="gameTypes"><li class="sub">—</li></ul>
     </div>
 
     <div class="card">
-      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Mistakes since last class</h2>
+      <h2 style="font-size:0.98rem; margin:0 0 0.55rem;">Mistakes since last class</h2>
       <ul id="mistakes"><li class="sub">—</li></ul>
     </div>
 
     <div class="card">
-      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Top 3 focus recommendations</h2>
+      <h2 style="font-size:0.98rem; margin:0 0 0.55rem;">Top 3 focus recommendations</h2>
       <ul id="reco"><li class="sub">—</li></ul>
-    </div>
-
-    <div class="card">
-      <h2 style="font-size:1rem; margin:0 0 0.6rem;">Data limitations</h2>
-      <ul id="qualityReasons"><li class="sub">—</li></ul>
     </div>
   </div>
 
   <script>
     function $(id) { return document.getElementById(id); }
+    function formatDateTimeLocal(value) {
+      if (!value) return '—';
+      const date = new Date(value);
+      if (!Number.isFinite(date.getTime())) return '—';
+      return new Intl.DateTimeFormat(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      }).format(date);
+    }
+
     let pollTimer = null;
     let pollAttempts = 0;
     const maxPollAttempts = 12;
@@ -187,7 +255,6 @@
     function schedulePoll() {
       clearPoll();
       if (pollAttempts >= maxPollAttempts) {
-        $('status').textContent = 'Still preparing the brief. Please click Load brief again.';
         return;
       }
       pollAttempts += 1;
@@ -212,42 +279,50 @@
       }
       el.innerHTML = items.map((x) => '<li>' + esc(x) + '</li>').join('');
     }
-    function qualityReasonLabel(x) {
-      const map = {
-        no_previous_attended_class: 'No previous attended class was found for this student.',
-        last_class_missing_normalized_meeting_id: 'The previous class exists but its meeting reference could not be matched cleanly.',
-        previous_class_has_no_matched_parsed_enrichment: 'The previous class was found, but no parsed lesson enrichment was available.',
-        matched_enrichment_but_parsed_response_missing: 'Lesson enrichment matched, but the parsed summary payload was missing.',
-        no_recent_practice_activity: 'No recent app practice activity was recorded since the last class.',
-        no_recent_mistake_signals: 'No recent mistake signals were available from lesson or app data.',
-      };
-      return map[x] || x;
+    function normalizeTokens(items) {
+      if (!Array.isArray(items)) return [];
+      const deduped = [];
+      const seen = new Set();
+      for (const raw of items) {
+        const token = String(raw == null ? '' : raw).trim();
+        if (!token) continue;
+        const key = token.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(token);
+      }
+      return deduped;
+    }
+    function renderTokenGrid(containerEl, countEl, items, emptyText = 'None', asList = false) {
+      const tokens = normalizeTokens(items);
+      countEl.textContent = String(tokens.length);
+      if (!tokens.length) {
+        containerEl.innerHTML = `<span class="token muted">${esc(emptyText)}</span>`;
+        return;
+      }
+      containerEl.innerHTML = tokens
+        .map((x) => `<span class="token"${asList ? ' style="width:100%;"' : ''}>${esc(x)}</span>`)
+        .join('');
     }
     function render(data) {
-      $('briefStatus').textContent = data.status || '—';
       $('readiness').textContent = data.readinessScore || '—';
-      $('generated').textContent = data.generatedAt || '—';
+      $('generated').textContent = formatDateTimeLocal(data.generatedAt);
       const p = data.appPracticeSinceLastClass || {};
-      const diagnostics = data.qualityDiagnostics || {};
-      const qualityReasons = Array.isArray(diagnostics.qualityImpactReasons)
-        ? diagnostics.qualityImpactReasons
-        : [];
       $('practice').textContent = `games=${p.gamesPlayed || 0}, completed=${p.completedGames || 0}, types=${p.uniqueGameTypes || 0}`;
       $('readinessNumeric').textContent = data.readinessNumeric != null ? String(data.readinessNumeric) : '—';
       $('confidence').textContent = data.confidence || '—';
       $('grammarMistakeCount').textContent = String(p.grammarMistakeCount || 0);
       $('pronMistakeCount').textContent = String(p.pronunciationMistakeCount || 0);
-      $('lastActivityAt').textContent = p.lastActivityAt || '—';
+      $('lastActivityAt').textContent = formatDateTimeLocal(p.lastActivityAt);
       $('briefText').textContent = data.briefText || 'Generating...';
       $('readinessRationale').textContent = data.readinessRationale || '—';
 
       const s = data.lastSessionSummary || {};
-      $('topics').textContent = (s.topics || []).join(', ') || '—';
-      $('vocab').textContent = (s.vocabulary || []).join(', ') || '—';
-      $('grammar').textContent = (s.grammar || []).join(', ') || '—';
+      renderTokenGrid($('topics'), $('topicsCount'), s.topics || [], 'None', true);
+      renderTokenGrid($('vocab'), $('vocabCount'), s.vocabulary || []);
+      renderTokenGrid($('grammar'), $('grammarCount'), s.grammar || []);
       list($('mistakes'), data.mistakesSinceLastClass || []);
       list($('reco'), data.topFocusRecommendations || []);
-      list($('qualityReasons'), qualityReasons.map(qualityReasonLabel));
       list(
         $('gameTypes'),
         (p.topGameTypes || []).map((x) =>
@@ -280,9 +355,6 @@
         if (!Number.isFinite(classId) || classId <= 0) {
           throw new Error('Please enter a valid class ID.');
         }
-        if (!opts.silent) {
-          $('status').textContent = force ? 'Refreshing...' : 'Loading...';
-        }
         const path = force
           ? `/v1/teachers/classes/${classId}/pre-session-brief/refresh`
           : `/v1/teachers/classes/${classId}/pre-session-brief`;
@@ -290,16 +362,13 @@
         const data = await callApi(method, path);
         render(data);
         if (shouldPoll(data.status)) {
-          $('status').textContent = 'Preparing the latest brief...';
           schedulePoll();
         } else {
           clearPoll();
-          $('status').textContent = force ? 'Brief refreshed' : 'Brief loaded';
         }
       } catch (e) {
         clearPoll();
         showErr(e.message || 'Unable to load the brief right now. Please try again.');
-        $('status').textContent = '';
       }
     }
 
